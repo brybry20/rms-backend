@@ -1,5 +1,7 @@
 from flask import request, jsonify
 from models.user import User
+from database.db import get_db_connection
+import bcrypt
 
 def register_routes(app):
     
@@ -15,11 +17,9 @@ def register_routes(app):
         city = data.get('city')
         barangay = data.get('barangay')
         
-        # Validation
         if not all([username, password, email, company_name, city, barangay]):
             return jsonify({'error': 'All fields are required'}), 400
         
-        # Create user with role 'dealer'
         result = User.create(username, password, 'dealer', email, contact_number)
         
         if not result['success']:
@@ -27,7 +27,6 @@ def register_routes(app):
         
         user_id = result['user_id']
         
-        # Create dealer profile (company_name is the distributor name)
         profile_result = User.create_dealer_profile(user_id, company_name, city, barangay)
         
         if not profile_result['success']:
@@ -54,15 +53,11 @@ def register_routes(app):
         
         user = result['user']
         
-        # Check if dealer is approved
         distributor_name = None
         if user['role'] == 'dealer':
             profile = User.get_dealer_profile(user['id'])
-            
             if profile and not profile.get('is_approved', 0):
                 return jsonify({'error': 'Your account is pending admin approval'}), 401
-            
-            # Get company_name as distributor_name
             if profile:
                 distributor_name = profile.get('company_name')
         
@@ -72,10 +67,65 @@ def register_routes(app):
                 'id': user['id'],
                 'username': user['username'],
                 'role': user['role'],
-                'distributor_name': distributor_name  # ✅ Ito ang ipapasa sa frontend
+                'distributor_name': distributor_name
             }
         }), 200
     
     @app.route('/api/health', methods=['GET'])
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
+    
+    # ✅ TEMPORARY ENDPOINT - Create default users (remove after use)
+    @app.route('/api/create-default-users', methods=['POST'])
+    def create_default_users():
+        """Temporary endpoint to create all default users"""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        default_users = [
+            {'username': 'admin', 'password': 'admin123', 'role': 'super_admin', 'email': 'admin@rma.com', 'contact': '09123456789'},
+            {'username': 'authorizer1', 'password': 'auth123', 'role': 'authorizer', 'email': 'authorizer@rma.com', 'contact': '09123456788'},
+            {'username': 'approver1', 'password': 'approve123', 'role': 'approver', 'email': 'approver@rma.com', 'contact': '09123456787'},
+            {'username': 'dealer1', 'password': 'dealer123', 'role': 'dealer', 'email': 'dealer@rma.com', 'contact': '09123456786'},
+        ]
+        
+        created_users = []
+        existing_users = []
+        
+        for user_data in default_users:
+            cursor.execute('SELECT id FROM users WHERE username = %s', (user_data['username'],))
+            if cursor.fetchone():
+                existing_users.append(user_data['username'])
+                continue
+            
+            hashed = bcrypt.hashpw(user_data['password'].encode('utf-8'), bcrypt.gensalt())
+            
+            cursor.execute('''
+                INSERT INTO users (username, password, role, email, contact_number)
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (user_data['username'], hashed.decode('utf-8'), user_data['role'], user_data['email'], user_data['contact']))
+            
+            user_id = cursor.lastrowid
+            created_users.append(user_data['username'])
+            
+            if user_data['role'] == 'dealer':
+                cursor.execute('''
+                    INSERT INTO dealer_profiles (user_id, company_name, city, barangay, is_approved)
+                    VALUES (%s, %s, %s, %s, %s)
+                ''', (user_id, 'Deltaplus Distributor', 'Quezon City', 'Barangay Central', 1))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'message': 'Default users created!',
+            'created': created_users,
+            'already_exist': existing_users,
+            'users': [
+                {'username': 'admin', 'password': 'admin123', 'role': 'super_admin'},
+                {'username': 'authorizer1', 'password': 'auth123', 'role': 'authorizer'},
+                {'username': 'approver1', 'password': 'approve123', 'role': 'approver'},
+                {'username': 'dealer1', 'password': 'dealer123', 'role': 'dealer'},
+            ]
+        }), 201
