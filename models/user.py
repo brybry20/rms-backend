@@ -17,18 +17,18 @@ class User:
         try:
             cursor.execute('''
                 INSERT INTO users (username, password, role, email, contact_number) 
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s)
             ''', (username, hashed.decode('utf-8'), role, email, contact_number))
             user_id = cursor.lastrowid
             conn.commit()
             cursor.close()
             conn.close()
             return {'success': True, 'user_id': user_id}
-        except sqlite3.IntegrityError:
+        except Exception as e:
             conn.rollback()
             cursor.close()
             conn.close()
-            return {'success': False, 'error': 'Username already exists'}
+            return {'success': False, 'error': str(e)}
     
     @staticmethod
     def find_by_username(username):
@@ -38,7 +38,7 @@ class User:
             return None
         
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+        cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
         user = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -55,7 +55,7 @@ class User:
             return None
         
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+        cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
         user = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -84,7 +84,7 @@ class User:
         try:
             cursor.execute('''
                 INSERT INTO dealer_profiles (user_id, company_name, city, barangay)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             ''', (user_id, company_name, city, barangay))
             conn.commit()
             cursor.close()
@@ -104,7 +104,7 @@ class User:
             return None
         
         cursor = conn.cursor()
-        cursor.execute('SELECT company_name, city, barangay, is_approved FROM dealer_profiles WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT company_name, city, barangay, is_approved FROM dealer_profiles WHERE user_id = %s', (user_id,))
         profile = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -121,7 +121,7 @@ class User:
             return {'success': False, 'error': 'Database connection failed'}
         
         cursor = conn.cursor()
-        cursor.execute('UPDATE dealer_profiles SET is_approved = 1 WHERE user_id = ?', (user_id,))
+        cursor.execute('UPDATE dealer_profiles SET is_approved = 1 WHERE user_id = %s', (user_id,))
         conn.commit()
         cursor.close()
         conn.close()
