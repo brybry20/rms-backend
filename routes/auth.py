@@ -53,13 +53,19 @@ def register_routes(app):
         
         user = result['user']
         
+        # ✅ Check if dealer is approved
         distributor_name = None
         if user['role'] == 'dealer':
             profile = User.get_dealer_profile(user['id'])
-            if profile and not profile.get('is_approved', 0):
-                return jsonify({'error': 'Your account is pending admin approval'}), 401
-            if profile:
-                distributor_name = profile.get('company_name')
+            
+            # ✅ KUNG WALANG PROFILE O HINDI APPROVED, HUWAG PAPAPASUKIN
+            if not profile:
+                return jsonify({'error': 'Dealer profile not found'}), 401
+            
+            if not profile.get('is_approved', 0):
+                return jsonify({'error': 'Your account is pending admin approval. Please wait for confirmation.'}), 401
+            
+            distributor_name = profile.get('company_name')
         
         return jsonify({
             'message': 'Login successful!',

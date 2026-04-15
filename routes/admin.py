@@ -5,7 +5,6 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/pending-dealers', methods=['GET'])
     def get_pending_dealers():
-        """Get all dealers pending approval"""
         from database.db import get_db_connection
         
         conn = get_db_connection()
@@ -30,7 +29,6 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/approve-dealer/<int:user_id>', methods=['PUT'])
     def approve_dealer(user_id):
-        """Approve a dealer account"""
         result = User.approve_dealer(user_id)
         
         if result['success']:
@@ -40,17 +38,15 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/reject-dealer/<int:user_id>', methods=['DELETE'])
     def reject_dealer(user_id):
-        """Super Admin can reject and delete a dealer account"""
         from database.db import get_db_connection
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if dealer exists and is pending
         cursor.execute('''
             SELECT u.id FROM users u
             JOIN dealer_profiles dp ON u.id = dp.user_id
-            WHERE u.id = ? AND u.role = 'dealer' AND dp.is_approved = 0
+            WHERE u.id = %s AND u.role = 'dealer' AND dp.is_approved = 0
         ''', (user_id,))
         
         if not cursor.fetchone():
@@ -58,10 +54,8 @@ def register_admin_routes(app):
             conn.close()
             return jsonify({'error': 'Dealer not found or already approved'}), 404
         
-        # Delete dealer profile first (due to foreign key)
-        cursor.execute('DELETE FROM dealer_profiles WHERE user_id = ?', (user_id,))
-        # Delete user
-        cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        cursor.execute('DELETE FROM dealer_profiles WHERE user_id = %s', (user_id,))
+        cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
         
         conn.commit()
         cursor.close()
@@ -71,7 +65,6 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/all-dealers', methods=['GET'])
     def get_all_dealers():
-        """Get all dealers (approved and pending)"""
         from database.db import get_db_connection
         
         conn = get_db_connection()
@@ -97,12 +90,12 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/all-rma', methods=['GET'])
     def get_all_rma():
-        """Get all RMA requests (for Super Admin)"""
         from database.db import get_db_connection
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # ✅ FIX: Convert authorized_by and approved_by to TEXT for comparison
         cursor.execute('''
             SELECT r.*, 
                    u.username as dealer_name, 
@@ -112,8 +105,8 @@ def register_admin_routes(app):
             FROM rma_requests r
             JOIN users u ON r.dealer_id = u.id
             JOIN dealer_profiles dp ON u.id = dp.user_id
-            LEFT JOIN users au ON r.authorized_by = au.id
-            LEFT JOIN users ap ON r.approved_by = ap.id
+            LEFT JOIN users au ON r.authorized_by::text = au.id::text
+            LEFT JOIN users ap ON r.approved_by::text = ap.id::text
             ORDER BY r.created_at DESC
         ''')
         
@@ -128,7 +121,6 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/rma/<int:rma_id>', methods=['GET'])
     def get_rma_details(rma_id):
-        """Get specific RMA details"""
         from database.db import get_db_connection
         
         conn = get_db_connection()
@@ -143,9 +135,9 @@ def register_admin_routes(app):
             FROM rma_requests r
             JOIN users u ON r.dealer_id = u.id
             JOIN dealer_profiles dp ON u.id = dp.user_id
-            LEFT JOIN users au ON r.authorized_by = au.id
-            LEFT JOIN users ap ON r.approved_by = ap.id
-            WHERE r.id = ?
+            LEFT JOIN users au ON r.authorized_by::text = au.id::text
+            LEFT JOIN users ap ON r.approved_by::text = ap.id::text
+            WHERE r.id = %s
         ''', (rma_id,))
         
         row = cursor.fetchone()
@@ -159,7 +151,6 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/rma/<int:rma_id>', methods=['PUT'])
     def update_admin_rma(rma_id):
-        """Super Admin can update any RMA"""
         from database.db import get_db_connection
         import json
         
@@ -168,14 +159,12 @@ def register_admin_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if RMA exists
-        cursor.execute('SELECT id FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT id FROM rma_requests WHERE id = %s', (rma_id,))
         if not cursor.fetchone():
             cursor.close()
             conn.close()
             return jsonify({'error': 'RMA not found'}), 404
         
-        # Build dynamic UPDATE query
         allowed_fields = [
             'status', 'return_type', 'reason_for_return', 'warranty',
             'filer_name', 'distributor_name', 'product', 'product_description',
@@ -192,8 +181,7 @@ def register_admin_routes(app):
         
         for field in allowed_fields:
             if field in data:
-                set_clause.append(f"{field} = ?")
-                # Convert warranty to integer if present
+                set_clause.append(f"{field} = %s")
                 if field == 'warranty':
                     values.append(1 if data[field] else 0)
                 else:
@@ -209,7 +197,7 @@ def register_admin_routes(app):
         query = f'''
             UPDATE rma_requests 
             SET {', '.join(set_clause)}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         '''
         cursor.execute(query, values)
         conn.commit()
@@ -221,7 +209,6 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/rma/<int:rma_id>', methods=['DELETE'])
     def delete_admin_rma(rma_id):
-        """Super Admin can delete any RMA"""
         from database.db import get_db_connection
         import json
         import cloudinary
@@ -230,8 +217,7 @@ def register_admin_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if RMA exists and get attachments
-        cursor.execute('SELECT attachments, authorizer_attachments, approver_attachments FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT attachments, authorizer_attachments, approver_attachments FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         
         if not row:
@@ -239,7 +225,6 @@ def register_admin_routes(app):
             conn.close()
             return jsonify({'error': 'RMA not found'}), 404
         
-        # Delete attachments from Cloudinary
         try:
             if row['attachments']:
                 atts = json.loads(row['attachments'])
@@ -261,8 +246,7 @@ def register_admin_routes(app):
         except Exception as e:
             print(f"Error deleting from Cloudinary: {e}")
         
-        # Delete the RMA
-        cursor.execute('DELETE FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('DELETE FROM rma_requests WHERE id = %s', (rma_id,))
         conn.commit()
         
         cursor.close()
@@ -272,13 +256,11 @@ def register_admin_routes(app):
     
     @app.route('/api/admin/stats', methods=['GET'])
     def get_stats():
-        """Get overall statistics"""
         from database.db import get_db_connection
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Count by status
         cursor.execute('''
             SELECT status, COUNT(*) as count 
             FROM rma_requests 
@@ -289,7 +271,6 @@ def register_admin_routes(app):
         for row in cursor.fetchall():
             status_counts[row['status']] = row['count']
         
-        # Count dealers
         cursor.execute('''
             SELECT COUNT(*) as total, 
                    SUM(CASE WHEN dp.is_approved = 1 THEN 1 ELSE 0 END) as approved
@@ -299,22 +280,25 @@ def register_admin_routes(app):
         ''')
         
         dealer_row = cursor.fetchone()
-        
         cursor.close()
         conn.close()
+        
+        # ✅ FIX: Handle None values
+        total = dealer_row['total'] if dealer_row and dealer_row['total'] else 0
+        approved = dealer_row['approved'] if dealer_row and dealer_row['approved'] else 0
+        pending = total - approved
         
         return jsonify({
             'status_counts': status_counts,
             'dealers': {
-                'total': dealer_row['total'] if dealer_row else 0,
-                'approved': dealer_row['approved'] if dealer_row else 0,
-                'pending': (dealer_row['total'] - dealer_row['approved']) if dealer_row else 0
+                'total': total,
+                'approved': approved,
+                'pending': pending
             }
         }), 200
     
     @app.route('/api/admin/users', methods=['GET'])
     def get_all_users():
-        """Get all users (for Super Admin)"""
         from database.db import get_db_connection
         
         conn = get_db_connection()
@@ -339,12 +323,11 @@ def register_admin_routes(app):
 
     @app.route('/api/admin/create-user', methods=['POST'])
     def create_user():
-        """Super Admin can create Authorizer or Approver accounts"""
         data = request.get_json()
         
         username = data.get('username')
         password = data.get('password')
-        role = data.get('role')  # 'authorizer' or 'approver'
+        role = data.get('role')
         email = data.get('email')
         contact_number = data.get('contact_number')
         
@@ -366,7 +349,6 @@ def register_admin_routes(app):
 
     @app.route('/api/admin/dealer/<int:dealer_id>', methods=['PUT'])
     def update_dealer(dealer_id):
-        """Super Admin can update dealer information"""
         from database.db import get_db_connection
         
         data = request.get_json()
@@ -374,18 +356,16 @@ def register_admin_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Update user table
         cursor.execute('''
             UPDATE users 
-            SET username = ?, email = ?, contact_number = ?
-            WHERE id = ? AND role = 'dealer'
+            SET username = %s, email = %s, contact_number = %s
+            WHERE id = %s AND role = 'dealer'
         ''', (data.get('username'), data.get('email'), data.get('contact_number'), dealer_id))
         
-        # Update dealer_profiles table
         cursor.execute('''
             UPDATE dealer_profiles 
-            SET company_name = ?, city = ?, barangay = ?
-            WHERE user_id = ?
+            SET company_name = %s, city = %s, barangay = %s
+            WHERE user_id = %s
         ''', (data.get('company_name'), data.get('city'), data.get('barangay'), dealer_id))
         
         conn.commit()
@@ -396,7 +376,6 @@ def register_admin_routes(app):
 
     @app.route('/api/admin/dealer/<int:dealer_id>/change-password', methods=['PUT'])
     def change_dealer_password(dealer_id):
-        """Super Admin can change dealer password"""
         from database.db import get_db_connection
         import bcrypt
         
@@ -413,8 +392,8 @@ def register_admin_routes(app):
         
         cursor.execute('''
             UPDATE users 
-            SET password = ?
-            WHERE id = ? AND role = 'dealer'
+            SET password = %s
+            WHERE id = %s AND role = 'dealer'
         ''', (hashed.decode('utf-8'), dealer_id))
         
         conn.commit()
