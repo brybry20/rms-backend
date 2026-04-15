@@ -84,9 +84,9 @@ def register_routes(app):
         
         default_users = [
             {'username': 'admin', 'password': 'admin123', 'role': 'super_admin', 'email': 'admin@rma.com', 'contact': '09123456789'},
-            {'username': 'authorizer1', 'password': 'auth123', 'role': 'authorizer', 'email': 'authorizer@rma.com', 'contact': '09123456788'},
-            {'username': 'approver1', 'password': 'approve123', 'role': 'approver', 'email': 'approver@rma.com', 'contact': '09123456787'},
-            {'username': 'dealer1', 'password': 'dealer123', 'role': 'dealer', 'email': 'dealer@rma.com', 'contact': '09123456786'},
+            {'username': 'auth', 'password': 'auth123', 'role': 'authorizer', 'email': 'authorizer@rma.com', 'contact': '09123456788'},
+            {'username': 'app', 'password': 'app123', 'role': 'approver', 'email': 'approver@rma.com', 'contact': '09123456787'},
+           
         ]
         
         created_users = []
