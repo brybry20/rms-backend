@@ -1,32 +1,30 @@
-import os
 import sqlite3
-import psycopg2
-import psycopg2.extras
+import os
+from config import Config
 
 def get_db_connection():
-    """Create database connection for both SQLite (local) and PostgreSQL (production)"""
-    database_url = os.environ.get('DATABASE_URL')
-    
-    if database_url:
-        # Production: PostgreSQL
-        conn = psycopg2.connect(database_url)
-        conn.cursor_factory = psycopg2.extras.RealDictCursor
+    """Create database connection to SQLite"""
+    try:
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row  # Para makuha ang columns as dictionary
         return conn
-    else:
-        # Development: SQLite
-        conn = sqlite3.connect('rma.db')
-        conn.row_factory = sqlite3.Row
-        return conn
+    except Exception as e:
+        print(f"❌ Database connection error: {e}")
+        return None
 
 def init_db():
-    """Initialize database tables - creates all necessary tables if they don't exist"""
+    """Initialize all tables"""
     conn = get_db_connection()
+    if not conn:
+        print("❌ Failed to connect to database")
+        return
+    
     cursor = conn.cursor()
     
-    # Create users table
+    # Users table (lahat ng users)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             role TEXT NOT NULL,
@@ -36,78 +34,90 @@ def init_db():
         )
     ''')
     
-    # Create dealer_profiles table
+    # Dealer profiles
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS dealer_profiles (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER UNIQUE,
             company_name TEXT,
             city TEXT,
             barangay TEXT,
             is_approved INTEGER DEFAULT 0,
-            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
     
-    # Create rma_requests table
+    # RMA Requests
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS rma_requests (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             rma_number TEXT UNIQUE NOT NULL,
             dealer_id INTEGER,
+            
+            -- Return Merchandise Authorization
             return_type TEXT,
             reason_for_return TEXT,
             warranty INTEGER DEFAULT 0,
-            filer_name TEXT,
-            distributor_name TEXT,
-            date_filled TEXT,
-            product TEXT,
             product_description TEXT,
             work_environment TEXT,
+            distributor_name TEXT,
             po_number TEXT,
             sales_invoice_number TEXT,
             shipping_date TEXT,
             return_date TEXT,
+            
+            -- End User Details
             end_user_company TEXT,
             end_user_location TEXT,
             end_user_industry TEXT,
             end_user_contact_person TEXT,
+            
+            -- Problem & Comments
             problem_description TEXT,
             dealer_comments TEXT,
-            authorized_by TEXT,
+            
+            -- Authorization Details
+            authorized_by INTEGER,
             authorized_date TEXT,
             return_received_by TEXT,
             authorizer_comments TEXT,
-            approved_by TEXT,
+            
+            -- Approval Details
+            approved_by INTEGER,
             approved_date TEXT,
             approved_with TEXT,
             replacement_order_no TEXT,
             closed_date TEXT,
             approver_comments TEXT,
-            attachments TEXT,
-            authorizer_attachments TEXT,
-            approver_attachments TEXT,
+            
+            -- Status
             status TEXT DEFAULT 'pending_dealer',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (dealer_id) REFERENCES users (id),
+            FOREIGN KEY (authorized_by) REFERENCES users (id),
+            FOREIGN KEY (approved_by) REFERENCES users (id)
         )
     ''')
     
-    # Create notifications table
+    # Notifications table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS notifications (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             title TEXT,
             message TEXT,
             type TEXT,
             is_read INTEGER DEFAULT 0,
             related_rma_id INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (related_rma_id) REFERENCES rma_requests (id)
         )
     ''')
     
     conn.commit()
     cursor.close()
     conn.close()
-    print("✅ Database tables created successfully!")
+    print("✅ SQLite database and tables created successfully!")
