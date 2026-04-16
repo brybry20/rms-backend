@@ -1,39 +1,40 @@
+from database.db import get_db_connection
+from datetime import datetime
+from bson import ObjectId
 import json
-from database.db import get_db_connection, get_placeholder
-from config import Config
 import cloudinary
 import cloudinary.uploader
-from datetime import datetime
 
 class RMA:
     
     @staticmethod
+    def _serialize(doc):
+        """Convert MongoDB document to dictionary with string id"""
+        if doc:
+            doc['id'] = str(doc.pop('_id'))
+        return doc
+    
+    @staticmethod
     def generate_rma_number():
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        """Generate unique RMA number: RMA-MMDDYYYY-XXX"""
+        db = get_db_connection()
         current_date = datetime.now().strftime("%m%d%Y")
-        placeholder = get_placeholder()
-        cursor.execute(f'SELECT COUNT(*) as count FROM rma_requests WHERE rma_number LIKE {placeholder}', (f'RMA-{current_date}-%',))
-        row = cursor.fetchone()
         
-        if Config.USE_POSTGRES:
-            count = row['count'] if row else 0
-        else:
-            count = row[0] if row else 0
-            
-        cursor.close()
-        conn.close()
+        # Count existing RMAs for today
+        count = db.rma_requests.count_documents({
+            "rma_number": {"$regex": f"RMA-{current_date}-"}
+        })
+        
         sequence = str(count + 1).zfill(3)
         return f"RMA-{current_date}-{sequence}"
     
     @staticmethod
     def create(data, files=None):
-        """Create RMA request with proper error handling"""
+        """Create RMA request"""
         try:
             print("=" * 50)
             print("RMA.create called")
             print(f"Data received: {data}")
-            print(f"Files received: {files is not None}")
             
             # Check required fields
             required_fields = [
@@ -56,15 +57,10 @@ class RMA:
                     'error': f'Missing required fields: {", ".join(missing_fields)}'
                 }
             
-            conn = get_db_connection()
-            if not conn:
-                return {'success': False, 'error': 'Database connection failed'}
-            
-            cursor = conn.cursor()
+            db = get_db_connection()
             rma_number = RMA.generate_rma_number()
-            placeholder = get_placeholder()
             
-            # Kunin ang attachment_names galing sa form data
+            # Handle attachments
             attachment_names = data.get('attachment_names', '[]')
             if isinstance(attachment_names, str):
                 try:
@@ -97,200 +93,324 @@ class RMA:
                     except Exception as e:
                         print(f"Upload error: {e}")
             
-            attachments_json = json.dumps(attachment_urls) if attachment_urls else None
-            
             # Convert warranty to integer
             warranty_value = 1 if data.get('warranty') in ['true', 'True', True, 1, '1'] else 0
             
-            # Execute insert
-            cursor.execute(f'''
-                INSERT INTO rma_requests (
-                    rma_number, dealer_id,
-                    return_type, reason_for_return, warranty,
-                    filer_name, distributor_name, date_filled, product, product_description,
-                    work_environment,
-                    po_number, sales_invoice_number,
-                    shipping_date, return_date,
-                    end_user_company, end_user_location,
-                    end_user_industry, end_user_contact_person,
-                    problem_description, dealer_comments,
-                    attachments, status
-                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 
-                          {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
-                          {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
-                          {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
-                          {placeholder}, {placeholder}, {placeholder})
-            ''', (
-                rma_number, int(data.get('dealer_id')),
-                data.get('return_type'), data.get('reason_for_return'), warranty_value,
-                data.get('filer_name'), data.get('distributor_name'), data.get('date_filled'), data.get('product'), data.get('product_description'),
-                data.get('work_environment'),
-                data.get('po_number'), data.get('sales_invoice_number'),
-                data.get('shipping_date'), data.get('return_date'),
-                data.get('end_user_company'), data.get('end_user_location'),
-                data.get('end_user_industry'), data.get('end_user_contact_person'),
-                data.get('problem_description'), data.get('dealer_comments'),
-                attachments_json, 'pending_authorizer'
-            ))
+            # Create RMA document
+            rma = {
+                "rma_number": rma_number,
+                "dealer_id": data.get('dealer_id'),
+                "return_type": data.get('return_type'),
+                "reason_for_return": data.get('reason_for_return'),
+                "warranty": warranty_value,
+                "filer_name": data.get('filer_name'),
+                "distributor_name": data.get('distributor_name'),
+                "date_filled": data.get('date_filled'),
+                "product": data.get('product'),
+                "product_description": data.get('product_description'),
+                "work_environment": data.get('work_environment'),
+                "po_number": data.get('po_number'),
+                "sales_invoice_number": data.get('sales_invoice_number'),
+                "shipping_date": data.get('shipping_date'),
+                "return_date": data.get('return_date'),
+                "end_user_company": data.get('end_user_company'),
+                "end_user_location": data.get('end_user_location'),
+                "end_user_industry": data.get('end_user_industry'),
+                "end_user_contact_person": data.get('end_user_contact_person'),
+                "problem_description": data.get('problem_description'),
+                "dealer_comments": data.get('dealer_comments'),
+                "attachments": attachment_urls,
+                "authorized_by": None,
+                "authorized_date": None,
+                "return_received_by": None,
+                "authorizer_comments": None,
+                "authorizer_attachments": [],
+                "approved_by": None,
+                "approved_date": None,
+                "approved_with": None,
+                "replacement_order_no": None,
+                "closed_date": None,
+                "approver_comments": None,
+                "approver_attachments": [],
+                "status": "pending_authorizer",
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
+            }
             
-            # Get the last inserted ID
-            if Config.USE_POSTGRES:
-                cursor.execute('SELECT LASTVAL()')
-                rma_id = cursor.fetchone()[0]
-            else:
-                rma_id = cursor.lastrowid
-                
-            conn.commit()
-            cursor.close()
-            conn.close()
+            result = db.rma_requests.insert_one(rma)
+            rma_id = str(result.inserted_id)
             
             print(f"RMA created successfully: {rma_number} (ID: {rma_id})")
             
             return {
-                'success': True, 
-                'rma_id': rma_id, 
-                'rma_number': rma_number, 
+                'success': True,
+                'rma_id': rma_id,
+                'rma_number': rma_number,
                 'attachments': attachment_urls
             }
             
         except Exception as e:
             import traceback
-            error_detail = traceback.format_exc()
-            print(f"Error in RMA.create: {error_detail}")
-            
-            # Rollback if connection exists
-            if 'conn' in locals() and conn:
-                conn.rollback()
-                cursor.close()
-                conn.close()
-                
+            print(f"Error in RMA.create: {traceback.format_exc()}")
             return {'success': False, 'error': str(e)}
     
     @staticmethod
     def get_by_dealer(dealer_id):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        placeholder = get_placeholder()
-        cursor.execute(f'SELECT * FROM rma_requests WHERE dealer_id = {placeholder} ORDER BY created_at DESC', (dealer_id,))
-        rows = cursor.fetchall()
-        rmas = []
-        for row in rows:
-            rma_dict = dict(row)
-            if rma_dict.get('attachments'):
-                try:
-                    rma_dict['attachments'] = json.loads(rma_dict['attachments'])
-                except:
-                    rma_dict['attachments'] = []
-            rmas.append(rma_dict)
-        cursor.close()
-        conn.close()
-        return rmas
+        """Get all RMAs for a specific dealer"""
+        db = get_db_connection()
+        rmas = list(db.rma_requests.find({"dealer_id": dealer_id}).sort("created_at", -1))
+        return [RMA._serialize(r) for r in rmas]
     
     @staticmethod
     def get_by_id(rma_id, dealer_id=None):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        placeholder = get_placeholder()
-        if dealer_id:
-            cursor.execute(f'SELECT * FROM rma_requests WHERE id = {placeholder} AND dealer_id = {placeholder}', (rma_id, dealer_id))
-        else:
-            cursor.execute(f'SELECT * FROM rma_requests WHERE id = {placeholder}', (rma_id,))
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        if row:
-            rma_dict = dict(row)
-            if rma_dict.get('attachments'):
-                try:
-                    rma_dict['attachments'] = json.loads(rma_dict['attachments'])
-                except:
-                    rma_dict['attachments'] = []
-            return rma_dict
-        return None
+        """Get RMA by ID (optionally check dealer_id)"""
+        db = get_db_connection()
+        try:
+            query = {"_id": ObjectId(rma_id)}
+            if dealer_id:
+                query["dealer_id"] = dealer_id
+            
+            rma = db.rma_requests.find_one(query)
+            return RMA._serialize(rma)
+        except:
+            return None
     
     @staticmethod
     def update(rma_id, dealer_id, data):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        placeholder = get_placeholder()
-        cursor.execute(f'SELECT status FROM rma_requests WHERE id = {placeholder} AND dealer_id = {placeholder}', (rma_id, dealer_id))
-        row = cursor.fetchone()
-        if not row:
-            cursor.close()
-            conn.close()
+        """Update RMA request (only if pending_authorizer)"""
+        db = get_db_connection()
+        
+        # Check if RMA exists and is pending
+        rma = db.rma_requests.find_one({"_id": ObjectId(rma_id), "dealer_id": dealer_id})
+        if not rma:
             return {'success': False, 'error': 'RMA not found'}
-        if row['status'] != 'pending_authorizer':
-            cursor.close()
-            conn.close()
+        
+        if rma['status'] != 'pending_authorizer':
             return {'success': False, 'error': 'Cannot edit - RMA already processed'}
-        try:
-            cursor.execute(f'''
-                UPDATE rma_requests SET
-                    return_type = {placeholder}, reason_for_return = {placeholder}, warranty = {placeholder},
-                    filer_name = {placeholder}, distributor_name = {placeholder}, date_filled = {placeholder}, product = {placeholder}, product_description = {placeholder},
-                    work_environment = {placeholder},
-                    po_number = {placeholder}, sales_invoice_number = {placeholder},
-                    shipping_date = {placeholder}, return_date = {placeholder},
-                    end_user_company = {placeholder}, end_user_location = {placeholder},
-                    end_user_industry = {placeholder}, end_user_contact_person = {placeholder},
-                    problem_description = {placeholder}, dealer_comments = {placeholder},
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = {placeholder} AND dealer_id = {placeholder}
-            ''', (
-                data.get('return_type'), data.get('reason_for_return'),
-                1 if data.get('warranty') else 0,
-                data.get('filer_name'), data.get('distributor_name'), data.get('date_filled'), data.get('product'), data.get('product_description'),
-                data.get('work_environment'),
-                data.get('po_number'), data.get('sales_invoice_number'),
-                data.get('shipping_date'), data.get('return_date'),
-                data.get('end_user_company'), data.get('end_user_location'),
-                data.get('end_user_industry'), data.get('end_user_contact_person'),
-                data.get('problem_description'), data.get('dealer_comments'),
-                rma_id, dealer_id
-            ))
-            conn.commit()
-            cursor.close()
-            conn.close()
+        
+        # Prepare update data
+        update_data = {
+            "return_type": data.get('return_type'),
+            "reason_for_return": data.get('reason_for_return'),
+            "warranty": 1 if data.get('warranty') else 0,
+            "filer_name": data.get('filer_name'),
+            "distributor_name": data.get('distributor_name'),
+            "date_filled": data.get('date_filled'),
+            "product": data.get('product'),
+            "product_description": data.get('product_description'),
+            "work_environment": data.get('work_environment'),
+            "po_number": data.get('po_number'),
+            "sales_invoice_number": data.get('sales_invoice_number'),
+            "shipping_date": data.get('shipping_date'),
+            "return_date": data.get('return_date'),
+            "end_user_company": data.get('end_user_company'),
+            "end_user_location": data.get('end_user_location'),
+            "end_user_industry": data.get('end_user_industry'),
+            "end_user_contact_person": data.get('end_user_contact_person'),
+            "problem_description": data.get('problem_description'),
+            "dealer_comments": data.get('dealer_comments'),
+            "updated_at": datetime.now()
+        }
+        
+        # Remove None values
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        
+        result = db.rma_requests.update_one(
+            {"_id": ObjectId(rma_id)},
+            {"$set": update_data}
+        )
+        
+        if result.modified_count > 0:
             return {'success': True}
-        except Exception as e:
-            conn.rollback()
-            cursor.close()
-            conn.close()
-            return {'success': False, 'error': str(e)}
+        return {'success': False, 'error': 'No changes made'}
     
     @staticmethod
     def delete(rma_id, dealer_id):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        placeholder = get_placeholder()
-        cursor.execute(f'SELECT status FROM rma_requests WHERE id = {placeholder} AND dealer_id = {placeholder}', (rma_id, dealer_id))
-        row = cursor.fetchone()
-        if not row:
-            cursor.close()
-            conn.close()
+        """Delete RMA request (only if pending_authorizer)"""
+        db = get_db_connection()
+        
+        # Check if RMA exists and is pending
+        rma = db.rma_requests.find_one({"_id": ObjectId(rma_id), "dealer_id": dealer_id})
+        if not rma:
             return {'success': False, 'error': 'RMA not found'}
-        if row['status'] != 'pending_authorizer':
-            cursor.close()
-            conn.close()
+        
+        if rma['status'] != 'pending_authorizer':
             return {'success': False, 'error': 'Cannot delete - RMA already processed'}
-        try:
-            # Delete attachments from Cloudinary
-            cursor.execute(f'SELECT attachments FROM rma_requests WHERE id = {placeholder}', (rma_id,))
-            row = cursor.fetchone()
-            if row and row['attachments']:
-                attachments = json.loads(row['attachments'])
-                for att in attachments:
-                    try:
+        
+        # Delete attachments from Cloudinary
+        if rma.get('attachments'):
+            for att in rma['attachments']:
+                try:
+                    if att.get('public_id'):
                         cloudinary.uploader.destroy(att['public_id'])
-                    except:
-                        pass
-            cursor.execute(f'DELETE FROM rma_requests WHERE id = {placeholder} AND dealer_id = {placeholder}', (rma_id, dealer_id))
-            conn.commit()
-            cursor.close()
-            conn.close()
+                except:
+                    pass
+        
+        result = db.rma_requests.delete_one({"_id": ObjectId(rma_id)})
+        
+        if result.deleted_count > 0:
             return {'success': True}
-        except Exception as e:
-            conn.rollback()
-            cursor.close()
-            conn.close()
-            return {'success': False, 'error': str(e)}
+        return {'success': False, 'error': 'Failed to delete'}
+    
+    @staticmethod
+    def get_all():
+        """Get all RMAs with dealer information"""
+        db = get_db_connection()
+        
+        pipeline = [
+            {"$lookup": {
+                "from": "users",
+                "localField": "dealer_id",
+                "foreignField": "_id",
+                "as": "dealer"
+            }},
+            {"$unwind": {"path": "$dealer", "preserveNullAndEmptyArrays": True}},
+            {"$lookup": {
+                "from": "dealer_profiles",
+                "localField": "dealer._id",
+                "foreignField": "user_id",
+                "as": "profile"
+            }},
+            {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}},
+            {"$sort": {"created_at": -1}}
+        ]
+        
+        rmas = list(db.rma_requests.aggregate(pipeline))
+        return [RMA._serialize(r) for r in rmas]
+    
+    @staticmethod
+    def get_pending_for_authorizer():
+        """Get all RMAs pending for authorizer"""
+        db = get_db_connection()
+        rmas = list(db.rma_requests.find({"status": "pending_authorizer"}).sort("created_at", 1))
+        return [RMA._serialize(r) for r in rmas]
+    
+    @staticmethod
+    def get_pending_for_approver():
+        """Get all RMAs pending for approver (authorized)"""
+        db = get_db_connection()
+        rmas = list(db.rma_requests.find({"status": "authorized"}).sort("authorized_date", 1))
+        return [RMA._serialize(r) for r in rmas]
+    
+    @staticmethod
+    def authorize(rma_id, data):
+        """Authorize an RMA (by authorizer)"""
+        db = get_db_connection()
+        
+        rma = db.rma_requests.find_one({"_id": ObjectId(rma_id)})
+        if not rma:
+            return {'success': False, 'error': 'RMA not found'}
+        
+        if rma['status'] != 'pending_authorizer':
+            return {'success': False, 'error': 'RMA is not pending for authorization'}
+        
+        update_data = {
+            "authorized_by": data.get('authorized_by'),
+            "authorized_date": data.get('authorized_date', datetime.now().strftime("%Y-%m-%d")),
+            "return_date": data.get('return_date'),
+            "return_received_by": data.get('return_received_by'),
+            "authorizer_comments": data.get('authorizer_comments'),
+            "status": "authorized",
+            "updated_at": datetime.now()
+        }
+        
+        # Handle attachments if any
+        if data.get('authorizer_attachments'):
+            update_data["authorizer_attachments"] = data.get('authorizer_attachments')
+        
+        result = db.rma_requests.update_one(
+            {"_id": ObjectId(rma_id)},
+            {"$set": update_data}
+        )
+        
+        if result.modified_count > 0:
+            return {'success': True, 'status': 'authorized'}
+        return {'success': False, 'error': 'No changes made'}
+    
+    @staticmethod
+    def approve(rma_id, data):
+        """Approve an RMA (by approver)"""
+        db = get_db_connection()
+        
+        rma = db.rma_requests.find_one({"_id": ObjectId(rma_id)})
+        if not rma:
+            return {'success': False, 'error': 'RMA not found'}
+        
+        if rma['status'] != 'authorized':
+            return {'success': False, 'error': 'RMA is not authorized'}
+        
+        update_data = {
+            "approved_by": data.get('approved_by'),
+            "approved_date": data.get('approved_date', datetime.now().strftime("%Y-%m-%d")),
+            "approved_with": data.get('approved_with'),
+            "replacement_order_no": data.get('replacement_order_no'),
+            "closed_date": data.get('closed_date'),
+            "approver_comments": data.get('approver_comments'),
+            "status": "approved",
+            "updated_at": datetime.now()
+        }
+        
+        # Handle attachments if any
+        if data.get('approver_attachments'):
+            update_data["approver_attachments"] = data.get('approver_attachments')
+        
+        result = db.rma_requests.update_one(
+            {"_id": ObjectId(rma_id)},
+            {"$set": update_data}
+        )
+        
+        if result.modified_count > 0:
+            return {'success': True, 'status': 'approved'}
+        return {'success': False, 'error': 'No changes made'}
+    
+    @staticmethod
+    def reject(rma_id, data, role):
+        """Reject an RMA (by authorizer or approver)"""
+        db = get_db_connection()
+        
+        rma = db.rma_requests.find_one({"_id": ObjectId(rma_id)})
+        if not rma:
+            return {'success': False, 'error': 'RMA not found'}
+        
+        if role == 'authorizer' and rma['status'] != 'pending_authorizer':
+            return {'success': False, 'error': 'RMA is not pending for authorization'}
+        
+        if role == 'approver' and rma['status'] != 'authorized':
+            return {'success': False, 'error': 'RMA is not authorized'}
+        
+        update_data = {
+            "status": "rejected",
+            "updated_at": datetime.now()
+        }
+        
+        if role == 'authorizer':
+            update_data["authorized_by"] = data.get('authorized_by')
+            update_data["authorizer_comments"] = data.get('authorizer_comments')
+        else:
+            update_data["approved_by"] = data.get('approved_by')
+            update_data["approver_comments"] = data.get('approver_comments')
+        
+        result = db.rma_requests.update_one(
+            {"_id": ObjectId(rma_id)},
+            {"$set": update_data}
+        )
+        
+        if result.modified_count > 0:
+            return {'success': True, 'status': 'rejected'}
+        return {'success': False, 'error': 'No changes made'}
+    
+    @staticmethod
+    def get_stats():
+        """Get RMA statistics"""
+        db = get_db_connection()
+        
+        # Status counts
+        pipeline = [
+            {"$group": {
+                "_id": "$status",
+                "count": {"$sum": 1}
+            }}
+        ]
+        status_counts = {item['_id']: item['count'] for item in db.rma_requests.aggregate(pipeline)}
+        
+        return status_counts

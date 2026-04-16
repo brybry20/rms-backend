@@ -1,73 +1,31 @@
+import json
+import cloudinary.uploader
 from flask import request, jsonify
 from database.db import get_db_connection
-from datetime import date
-import json
-import cloudinary
-import cloudinary.uploader
+from models.rma import RMA
+from bson import ObjectId
+from datetime import date, datetime
 
 def register_approver_routes(app):
     
     @app.route('/api/approver/pending', methods=['GET'])
     def get_pending_approvals():
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT r.*, u.username as dealer_name, dp.company_name,
-                   au.username as authorizer_name
-            FROM rma_requests r
-            JOIN users u ON r.dealer_id = u.id
-            JOIN dealer_profiles dp ON u.id = dp.user_id
-            LEFT JOIN users au ON r.authorized_by = au.id
-            WHERE r.status = 'authorized'
-            ORDER BY r.authorized_date ASC
-        ''')
-        
-        rmas = []
-        for row in cursor.fetchall():
-            rmas.append(dict(row))
-        
-        cursor.close()
-        conn.close()
-        
+        rmas = RMA.get_pending_for_approver()
         return jsonify({'rmas': rmas}), 200
     
     @app.route('/api/approver/history', methods=['GET'])
     def get_approval_history():
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        db = get_db_connection()
+        rmas = list(db.rma_requests.find({"status": {"$in": ["approved", "rejected", "completed"]}}).sort("updated_at", -1))
         
-        cursor.execute('''
-            SELECT r.*, u.username as dealer_name, dp.company_name,
-                   au.username as authorizer_name,
-                   ap.username as approver_name
-            FROM rma_requests r
-            JOIN users u ON r.dealer_id = u.id
-            JOIN dealer_profiles dp ON u.id = dp.user_id
-            LEFT JOIN users au ON r.authorized_by = au.id
-            LEFT JOIN users ap ON r.approved_by = ap.id
-            WHERE r.status = 'approved' OR r.status = 'rejected' OR r.status = 'completed'
-            ORDER BY r.updated_at DESC
-        ''')
+        result = []
+        for rma in rmas:
+            rma['id'] = str(rma.pop('_id'))
+            result.append(rma)
         
-        rmas = []
-        for row in cursor.fetchall():
-            rma_dict = dict(row)
-            if rma_dict.get('approver_attachments'):
-                try:
-                    rma_dict['approver_attachments'] = json.loads(rma_dict['approver_attachments'])
-                except:
-                    rma_dict['approver_attachments'] = []
-            else:
-                rma_dict['approver_attachments'] = []
-            rmas.append(rma_dict)
-        
-        cursor.close()
-        conn.close()
-        
-        return jsonify({'rmas': rmas}), 200
+        return jsonify({'rmas': result}), 200
     
-    @app.route('/api/approver/approve/<int:rma_id>', methods=['PUT'])
+    @app.route('/api/approver/approve/<rma_id>', methods=['PUT'])
     def approve_rma(rma_id):
         data = request.form.to_dict()
         files = request.files.getlist('approver_attachments')
@@ -90,6 +48,7 @@ def register_approver_routes(app):
         if not closed_date:
             return jsonify({'error': 'closed_date is required'}), 400
         
+        # Upload files to Cloudinary
         attachment_urls = []
         for idx, file in enumerate(files):
             if file and file.filename:
@@ -115,55 +74,24 @@ def register_approver_routes(app):
                 except Exception as e:
                     print(f"Upload error: {e}")
         
-        attachments_json = json.dumps(attachment_urls) if attachment_urls else None
+        approve_data = {
+            'approved_by': approved_by,
+            'approved_date': approved_date,
+            'approved_with': approved_with,
+            'replacement_order_no': replacement_order_no,
+            'closed_date': closed_date,
+            'approver_comments': approver_comments,
+            'approver_attachments': attachment_urls
+        }
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        result = RMA.approve(rma_id, approve_data)
         
-        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
-        row = cursor.fetchone()
-        
-        if not row:
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'RMA not found'}), 404
-        
-        if row['status'] != 'authorized':
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'RMA is not authorized'}), 400
-        
-        try:
-            cursor.execute('''
-                UPDATE rma_requests SET
-                    approved_by = %s,
-                    approved_date = %s,
-                    approved_with = %s,
-                    replacement_order_no = %s,
-                    closed_date = %s,
-                    approver_comments = %s,
-                    approver_attachments = %s,
-                    status = 'approved',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            ''', (approved_by, approved_date, approved_with, replacement_order_no, closed_date, approver_comments, attachments_json, rma_id))
-            
-            conn.commit()
-            cursor.close()
-            conn.close()
-            
-            return jsonify({
-                'message': 'RMA approved successfully!',
-                'status': 'approved'
-            }), 200
-            
-        except Exception as e:
-            conn.rollback()
-            cursor.close()
-            conn.close()
-            return jsonify({'error': str(e)}), 400
+        if result['success']:
+            return jsonify({'message': 'RMA approved successfully!', 'status': 'approved'}), 200
+        else:
+            return jsonify({'error': result['error']}), 400
     
-    @app.route('/api/approver/reject/<int:rma_id>', methods=['PUT'])
+    @app.route('/api/approver/reject/<rma_id>', methods=['PUT'])
     def reject_approval(rma_id):
         data = request.get_json()
         
@@ -173,48 +101,19 @@ def register_approver_routes(app):
         if not approved_by:
             return jsonify({'error': 'approved_by is required'}), 400
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        reject_data = {
+            'approved_by': approved_by,
+            'approver_comments': approver_comments
+        }
         
-        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
-        row = cursor.fetchone()
+        result = RMA.reject(rma_id, reject_data, 'approver')
         
-        if not row:
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'RMA not found'}), 404
-        
-        if row['status'] != 'authorized':
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'RMA is not authorized'}), 400
-        
-        try:
-            cursor.execute('''
-                UPDATE rma_requests SET
-                    approved_by = %s,
-                    approver_comments = %s,
-                    status = 'rejected',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            ''', (approved_by, approver_comments, rma_id))
-            
-            conn.commit()
-            cursor.close()
-            conn.close()
-            
-            return jsonify({
-                'message': 'RMA rejected!',
-                'status': 'rejected'
-            }), 200
-            
-        except Exception as e:
-            conn.rollback()
-            cursor.close()
-            conn.close()
-            return jsonify({'error': str(e)}), 400
+        if result['success']:
+            return jsonify({'message': 'RMA rejected!', 'status': 'rejected'}), 200
+        else:
+            return jsonify({'error': result['error']}), 400
     
-    @app.route('/api/approver/update_approved/<int:rma_id>', methods=['PUT'])
+    @app.route('/api/approver/update_approved/<rma_id>', methods=['PUT'])
     def update_approved_rma(rma_id):
         data = request.form.to_dict()
         files = request.files.getlist('approver_attachments')
@@ -232,16 +131,13 @@ def register_approver_routes(app):
         closed_date = data.get('closed_date')
         approver_comments = data.get('approver_comments')
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        db = get_db_connection()
         
-        cursor.execute('SELECT status, approver_attachments FROM rma_requests WHERE id = %s', (rma_id,))
-        row = cursor.fetchone()
-        if not row:
-            cursor.close()
-            conn.close()
+        rma = db.rma_requests.find_one({"_id": ObjectId(rma_id)})
+        if not rma:
             return jsonify({'error': 'RMA not found'}), 404
         
+        # Upload new attachments if any
         if files:
             attachment_urls = []
             for idx, file in enumerate(files):
@@ -265,36 +161,29 @@ def register_approver_routes(app):
                         })
                     except Exception as e:
                         print(f"Upload error: {e}")
-            attachments_json = json.dumps(attachment_urls) if attachment_urls else None
+            attachments_json = attachment_urls
         else:
-            attachments_json = row['approver_attachments']
+            attachments_json = rma.get('approver_attachments', [])
         
-        try:
-            cursor.execute('''
-                UPDATE rma_requests SET
-                    approved_by = %s,
-                    approved_date = %s,
-                    approved_with = %s,
-                    replacement_order_no = %s,
-                    closed_date = %s,
-                    approver_comments = %s,
-                    approver_attachments = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            ''', (approved_by, approved_date, approved_with, replacement_order_no, closed_date, approver_comments, attachments_json, rma_id))
-            
-            conn.commit()
-            cursor.close()
-            conn.close()
-            
+        result = db.rma_requests.update_one(
+            {"_id": ObjectId(rma_id)},
+            {"$set": {
+                "approved_by": approved_by,
+                "approved_date": approved_date,
+                "approved_with": approved_with,
+                "replacement_order_no": replacement_order_no,
+                "closed_date": closed_date,
+                "approver_comments": approver_comments,
+                "approver_attachments": attachments_json,
+                "updated_at": datetime.now()
+            }}
+        )
+        
+        if result.modified_count > 0:
             return jsonify({'message': 'Approval details updated successfully!'}), 200
-        except Exception as e:
-            conn.rollback()
-            cursor.close()
-            conn.close()
-            return jsonify({'error': str(e)}), 400
+        return jsonify({'error': 'No changes made'}), 400
 
-    @app.route('/api/approver/request-change/<int:rma_id>', methods=['PUT'])
+    @app.route('/api/approver/request-change/<rma_id>', methods=['PUT'])
     def request_change(rma_id):
         data = request.get_json()
         
@@ -304,43 +193,18 @@ def register_approver_routes(app):
         if not approved_by:
             return jsonify({'error': 'approved_by is required'}), 400
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        db = get_db_connection()
         
-        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
-        row = cursor.fetchone()
+        result = db.rma_requests.update_one(
+            {"_id": ObjectId(rma_id), "status": "authorized"},
+            {"$set": {
+                "approved_by": approved_by,
+                "approver_comments": approver_comments,
+                "status": "pending_dealer",
+                "updated_at": datetime.now()
+            }}
+        )
         
-        if not row:
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'RMA not found'}), 404
-        
-        if row['status'] != 'authorized':
-            cursor.close()
-            conn.close()
-            return jsonify({'error': 'RMA is not authorized'}), 400
-        
-        try:
-            cursor.execute('''
-                UPDATE rma_requests SET
-                    approved_by = %s,
-                    approver_comments = %s,
-                    status = 'pending_dealer',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            ''', (approved_by, approver_comments, rma_id))
-            
-            conn.commit()
-            cursor.close()
-            conn.close()
-            
-            return jsonify({
-                'message': 'Changes requested! RMA returned to dealer.',
-                'status': 'pending_dealer'
-            }), 200
-            
-        except Exception as e:
-            conn.rollback()
-            cursor.close()
-            conn.close()
-            return jsonify({'error': str(e)}), 400
+        if result.modified_count > 0:
+            return jsonify({'message': 'Changes requested! RMA returned to dealer.', 'status': 'pending_dealer'}), 200
+        return jsonify({'error': 'RMA not found or not authorized'}), 400

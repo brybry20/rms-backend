@@ -1,10 +1,12 @@
 from flask import request, jsonify
 from models.user import User
-from database.db import get_db_connection, get_placeholder
-from config import Config
+from database.db import get_db_connection
 import bcrypt
+from bson import ObjectId
+from datetime import datetime
 
 def register_routes(app):
+    
     
     @app.route('/api/register', methods=['POST'])
     def register():
@@ -93,67 +95,10 @@ def register_routes(app):
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
     
-    @app.route('/api/reset-database', methods=['POST'])
-    def reset_database():
-        try:
-            from database.db import reset_database as reset_db
-            reset_db()
-            return jsonify({'message': 'Database reset successfully! All tables recreated.'}), 200
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/debug-register-full', methods=['POST'])
-    def debug_register_full():
-        try:
-            from models.user import User
-            data = request.get_json()
-            
-            username = data.get('username')
-            password = data.get('password')
-            email = data.get('email')
-            contact_number = data.get('contact_number')
-            company_name = data.get('company_name')
-            region = data.get('region')
-            province = data.get('province')
-            city = data.get('city')
-            barangay = data.get('barangay')
-            
-            # Test User.create
-            print("Creating user...")
-            result = User.create(username, password, 'dealer', email, contact_number)
-            print(f"User.create result: {result}")
-            
-            if not result['success']:
-                return jsonify({'error': f'User.create failed: {result["error"]}'}), 400
-            
-            user_id = result['user_id']
-            
-            # Test create_dealer_profile
-            print("Creating dealer profile...")
-            profile_result = User.create_dealer_profile(user_id, company_name, region, province, city, barangay)
-            print(f"Profile result: {profile_result}")
-            
-            if not profile_result['success']:
-                return jsonify({'error': f'create_dealer_profile failed: {profile_result["error"]}'}), 400
-            
-            return jsonify({
-                'message': 'Registration successful!',
-                'user_id': user_id
-            }), 201
-            
-        except Exception as e:
-            import traceback
-            return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
-    
     @app.route('/api/create-default-users', methods=['POST'])
     def create_default_users():
-        """Temporary endpoint to create all default users"""
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({'error': 'Database connection failed'}), 500
-        
-        cursor = conn.cursor()
-        placeholder = get_placeholder()
+        """Create default admin, authorizer, approver users"""
+        db = get_db_connection()
         
         default_users = [
             {'username': 'admin', 'password': 'admin123', 'role': 'super_admin', 'email': 'admin@rma.com', 'contact': '09123456789'},
@@ -165,23 +110,26 @@ def register_routes(app):
         existing_users = []
         
         for user_data in default_users:
-            cursor.execute(f'SELECT id FROM users WHERE username = {placeholder}', (user_data['username'],))
-            if cursor.fetchone():
+            # Check if user exists
+            existing = db.users.find_one({"username": user_data['username']})
+            if existing:
                 existing_users.append(user_data['username'])
                 continue
             
+            # Create user
             hashed = bcrypt.hashpw(user_data['password'].encode('utf-8'), bcrypt.gensalt())
             
-            cursor.execute(f'''
-                INSERT INTO users (username, password, role, email, contact_number)
-                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
-            ''', (user_data['username'], hashed.decode('utf-8'), user_data['role'], user_data['email'], user_data['contact']))
+            user = {
+                "username": user_data['username'],
+                "password": hashed.decode('utf-8'),
+                "role": user_data['role'],
+                "email": user_data['email'],
+                "contact_number": user_data['contact'],
+                "created_at": datetime.now()
+            }
             
+            db.users.insert_one(user)
             created_users.append(user_data['username'])
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
         
         return jsonify({
             'message': 'Default users created successfully!',
@@ -193,3 +141,21 @@ def register_routes(app):
                 {'username': 'app', 'password': 'app123', 'role': 'approver'},
             ]
         }), 201
+    
+    @app.route('/api/debug-users', methods=['GET'])
+    def debug_users():
+        from database.db import get_db_connection
+        db = get_db_connection()
+        users = list(db.users.find({}))
+        for u in users:
+            u['_id'] = str(u['_id'])
+        return jsonify({'users': users}), 200
+
+    @app.route('/api/debug-profiles', methods=['GET'])
+    def debug_profiles():
+        from database.db import get_db_connection
+        db = get_db_connection()
+        profiles = list(db.dealer_profiles.find({}))
+        for p in profiles:
+            p['_id'] = str(p['_id'])
+        return jsonify({'profiles': profiles}), 200
