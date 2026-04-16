@@ -1,5 +1,6 @@
 import bcrypt
-from database.db import get_db_connection
+from database.db import get_db_connection, get_placeholder
+from config import Config
 
 class User:
     @staticmethod
@@ -12,15 +13,17 @@ class User:
             return {'success': False, 'error': 'Database connection failed'}
         
         cursor = conn.cursor()
+        placeholder = get_placeholder()
         
         try:
-            cursor.execute('''
+            cursor.execute(f'''
                 INSERT INTO users (username, password, role, email, contact_number) 
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (username, hashed.decode('utf-8'), role, email, contact_number))
             conn.commit()
+            
             # Get the last inserted ID
-            cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
+            cursor.execute(f'SELECT id FROM users WHERE username = {placeholder}', (username,))
             user_id = cursor.fetchone()[0]
             cursor.close()
             conn.close()
@@ -39,15 +42,19 @@ class User:
             return None
         
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
+        placeholder = get_placeholder()
+        cursor.execute(f'SELECT * FROM users WHERE username = {placeholder}', (username,))
         user = cursor.fetchone()
         cursor.close()
         conn.close()
         
         if user:
-            # Convert tuple to dictionary manually
-            columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
-            return dict(zip(columns, user))
+            if Config.USE_POSTGRES:
+                return dict(user)
+            else:
+                # SQLite: Convert Row to dictionary
+                columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
+                return dict(zip(columns, user))
         return None
     
     @staticmethod
@@ -58,15 +65,19 @@ class User:
             return None
         
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
+        placeholder = get_placeholder()
+        cursor.execute(f'SELECT * FROM users WHERE id = {placeholder}', (user_id,))
         user = cursor.fetchone()
         cursor.close()
         conn.close()
         
         if user:
-            # Convert tuple to dictionary manually
-            columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
-            return dict(zip(columns, user))
+            if Config.USE_POSTGRES:
+                return dict(user)
+            else:
+                # SQLite: Convert Row to dictionary
+                columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
+                return dict(zip(columns, user))
         return None
     
     @staticmethod
@@ -85,11 +96,12 @@ class User:
             return {'success': False, 'error': 'Database connection failed'}
         
         cursor = conn.cursor()
+        placeholder = get_placeholder()
         
         try:
-            cursor.execute('''
+            cursor.execute(f'''
                 INSERT INTO dealer_profiles (user_id, company_name, city, barangay)
-                VALUES (%s, %s, %s, %s)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (user_id, company_name, city, barangay))
             conn.commit()
             cursor.close()
@@ -109,17 +121,21 @@ class User:
             return None
         
         cursor = conn.cursor()
-        cursor.execute('''
+        placeholder = get_placeholder()
+        cursor.execute(f'''
             SELECT company_name, city, barangay, is_approved 
-            FROM dealer_profiles WHERE user_id = %s
+            FROM dealer_profiles WHERE user_id = {placeholder}
         ''', (user_id,))
         profile = cursor.fetchone()
         cursor.close()
         conn.close()
         
         if profile:
-            columns = ['company_name', 'city', 'barangay', 'is_approved']
-            return dict(zip(columns, profile))
+            if Config.USE_POSTGRES:
+                return dict(profile)
+            else:
+                columns = ['company_name', 'city', 'barangay', 'is_approved']
+                return dict(zip(columns, profile))
         return None
     
     @staticmethod
@@ -130,7 +146,8 @@ class User:
             return {'success': False, 'error': 'Database connection failed'}
         
         cursor = conn.cursor()
-        cursor.execute('UPDATE dealer_profiles SET is_approved = 1 WHERE user_id = %s', (user_id,))
+        placeholder = get_placeholder()
+        cursor.execute(f'UPDATE dealer_profiles SET is_approved = 1 WHERE user_id = {placeholder}', (user_id,))
         conn.commit()
         cursor.close()
         conn.close()

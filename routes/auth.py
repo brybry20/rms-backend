@@ -1,6 +1,7 @@
 from flask import request, jsonify
 from models.user import User
 from database.db import get_db_connection
+from config import Config
 import bcrypt
 
 def register_routes(app):
@@ -79,12 +80,20 @@ def register_routes(app):
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
     
-    # ✅ TEMPORARY ENDPOINT - Create default users (PostgreSQL version)
+    # Helper function to get the correct placeholder
+    def get_placeholder():
+        return '%s' if Config.USE_POSTGRES else '?'
+    
+    # ✅ TEMPORARY ENDPOINT - Create default users (works with both SQLite and PostgreSQL)
     @app.route('/api/create-default-users', methods=['POST'])
     def create_default_users():
-        """Temporary endpoint to create all default users (PostgreSQL compatible)"""
+        """Temporary endpoint to create all default users"""
         conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
         cursor = conn.cursor()
+        placeholder = get_placeholder()
         
         default_users = [
             {'username': 'admin', 'password': 'admin123', 'role': 'super_admin', 'email': 'admin@rma.com', 'contact': '09123456789'},
@@ -96,16 +105,17 @@ def register_routes(app):
         existing_users = []
         
         for user_data in default_users:
-            cursor.execute('SELECT id FROM users WHERE username = %s', (user_data['username'],))
+            # Use the correct placeholder for the database
+            cursor.execute(f'SELECT id FROM users WHERE username = {placeholder}', (user_data['username'],))
             if cursor.fetchone():
                 existing_users.append(user_data['username'])
                 continue
             
             hashed = bcrypt.hashpw(user_data['password'].encode('utf-8'), bcrypt.gensalt())
             
-            cursor.execute('''
+            cursor.execute(f'''
                 INSERT INTO users (username, password, role, email, contact_number)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (user_data['username'], hashed.decode('utf-8'), user_data['role'], user_data['email'], user_data['contact']))
             
             created_users.append(user_data['username'])
