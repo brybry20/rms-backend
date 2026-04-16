@@ -11,7 +11,10 @@ def get_db_connection():
         if Config.USE_POSTGRES:
             # PostgreSQL for production
             import psycopg2
+            import psycopg2.extras
             conn = psycopg2.connect(Config.DATABASE_URL)
+            # This makes rows return as dictionaries
+            conn.cursor_factory = psycopg2.extras.RealDictCursor
             return conn
         else:
             # SQLite for local development
