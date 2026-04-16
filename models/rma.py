@@ -1,6 +1,5 @@
-import sqlite3
 import json
-from database.db import get_db_connection
+from database.db import get_db_connection, get_placeholder
 import cloudinary
 import cloudinary.uploader
 from datetime import datetime
@@ -12,7 +11,8 @@ class RMA:
         conn = get_db_connection()
         cursor = conn.cursor()
         current_date = datetime.now().strftime("%m%d%Y")
-        cursor.execute('SELECT COUNT(*) FROM rma_requests WHERE rma_number LIKE ?', (f'RMA-{current_date}-%',))
+        placeholder = get_placeholder()
+        cursor.execute(f'SELECT COUNT(*) FROM rma_requests WHERE rma_number LIKE {placeholder}', (f'RMA-{current_date}-%',))
         count = cursor.fetchone()[0]
         cursor.close()
         conn.close()
@@ -24,6 +24,7 @@ class RMA:
         conn = get_db_connection()
         cursor = conn.cursor()
         rma_number = RMA.generate_rma_number()
+        placeholder = get_placeholder()
         
         # Kunin ang attachment_names galing sa form data
         attachment_names = data.get('attachment_names', '[]')
@@ -38,7 +39,6 @@ class RMA:
             for idx, file_data in enumerate(files):
                 try:
                     original_name = attachment_names[idx] if idx < len(attachment_names) else f"file_{idx+1}"
-                    # I-upload sa Cloudinary na pinapanatili ang orihinal na filename
                     upload_result = cloudinary.uploader.upload(
                         file_data,
                         folder=f"rma_attachments/{rma_number}",
@@ -62,7 +62,7 @@ class RMA:
         attachments_json = json.dumps(attachment_urls) if attachment_urls else None
         
         try:
-            cursor.execute('''
+            cursor.execute(f'''
                 INSERT INTO rma_requests (
                     rma_number, dealer_id,
                     return_type, reason_for_return, warranty,
@@ -74,7 +74,7 @@ class RMA:
                     end_user_industry, end_user_contact_person,
                     problem_description, dealer_comments,
                     attachments, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
             ''', (
                 rma_number, int(data.get('dealer_id')),
                 data.get('return_type'), data.get('reason_for_return'),
@@ -103,9 +103,11 @@ class RMA:
     def get_by_dealer(dealer_id):
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM rma_requests WHERE dealer_id = ? ORDER BY created_at DESC', (dealer_id,))
+        placeholder = get_placeholder()
+        cursor.execute(f'SELECT * FROM rma_requests WHERE dealer_id = {placeholder} ORDER BY created_at DESC', (dealer_id,))
+        rows = cursor.fetchall()
         rmas = []
-        for row in cursor.fetchall():
+        for row in rows:
             rma_dict = dict(row)
             if rma_dict.get('attachments'):
                 rma_dict['attachments'] = json.loads(rma_dict['attachments'])
@@ -118,10 +120,11 @@ class RMA:
     def get_by_id(rma_id, dealer_id=None):
         conn = get_db_connection()
         cursor = conn.cursor()
+        placeholder = get_placeholder()
         if dealer_id:
-            cursor.execute('SELECT * FROM rma_requests WHERE id = ? AND dealer_id = ?', (rma_id, dealer_id))
+            cursor.execute(f'SELECT * FROM rma_requests WHERE id = {placeholder} AND dealer_id = {placeholder}', (rma_id, dealer_id))
         else:
-            cursor.execute('SELECT * FROM rma_requests WHERE id = ?', (rma_id,))
+            cursor.execute(f'SELECT * FROM rma_requests WHERE id = {placeholder}', (rma_id,))
         row = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -136,7 +139,8 @@ class RMA:
     def update(rma_id, dealer_id, data):
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT status FROM rma_requests WHERE id = ? AND dealer_id = ?', (rma_id, dealer_id))
+        placeholder = get_placeholder()
+        cursor.execute(f'SELECT status FROM rma_requests WHERE id = {placeholder} AND dealer_id = {placeholder}', (rma_id, dealer_id))
         row = cursor.fetchone()
         if not row:
             cursor.close()
@@ -147,18 +151,18 @@ class RMA:
             conn.close()
             return {'success': False, 'error': 'Cannot edit - RMA already processed'}
         try:
-            cursor.execute('''
+            cursor.execute(f'''
                 UPDATE rma_requests SET
-                    return_type = ?, reason_for_return = ?, warranty = ?,
-                    filer_name = ?, distributor_name = ?, date_filled = ?, product = ?, product_description = ?,
-                    work_environment = ?,
-                    po_number = ?, sales_invoice_number = ?,
-                    shipping_date = ?, return_date = ?,
-                    end_user_company = ?, end_user_location = ?,
-                    end_user_industry = ?, end_user_contact_person = ?,
-                    problem_description = ?, dealer_comments = ?,
+                    return_type = {placeholder}, reason_for_return = {placeholder}, warranty = {placeholder},
+                    filer_name = {placeholder}, distributor_name = {placeholder}, date_filled = {placeholder}, product = {placeholder}, product_description = {placeholder},
+                    work_environment = {placeholder},
+                    po_number = {placeholder}, sales_invoice_number = {placeholder},
+                    shipping_date = {placeholder}, return_date = {placeholder},
+                    end_user_company = {placeholder}, end_user_location = {placeholder},
+                    end_user_industry = {placeholder}, end_user_contact_person = {placeholder},
+                    problem_description = {placeholder}, dealer_comments = {placeholder},
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND dealer_id = ?
+                WHERE id = {placeholder} AND dealer_id = {placeholder}
             ''', (
                 data.get('return_type'), data.get('reason_for_return'),
                 1 if data.get('warranty') else 0,
@@ -185,7 +189,8 @@ class RMA:
     def delete(rma_id, dealer_id):
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT status FROM rma_requests WHERE id = ? AND dealer_id = ?', (rma_id, dealer_id))
+        placeholder = get_placeholder()
+        cursor.execute(f'SELECT status FROM rma_requests WHERE id = {placeholder} AND dealer_id = {placeholder}', (rma_id, dealer_id))
         row = cursor.fetchone()
         if not row:
             cursor.close()
@@ -197,7 +202,7 @@ class RMA:
             return {'success': False, 'error': 'Cannot delete - RMA already processed'}
         try:
             # Delete attachments from Cloudinary
-            cursor.execute('SELECT attachments FROM rma_requests WHERE id = ?', (rma_id,))
+            cursor.execute(f'SELECT attachments FROM rma_requests WHERE id = {placeholder}', (rma_id,))
             row = cursor.fetchone()
             if row and row['attachments']:
                 attachments = json.loads(row['attachments'])
@@ -206,7 +211,7 @@ class RMA:
                         cloudinary.uploader.destroy(att['public_id'])
                     except:
                         pass
-            cursor.execute('DELETE FROM rma_requests WHERE id = ? AND dealer_id = ?', (rma_id, dealer_id))
+            cursor.execute(f'DELETE FROM rma_requests WHERE id = {placeholder} AND dealer_id = {placeholder}', (rma_id, dealer_id))
             conn.commit()
             cursor.close()
             conn.close()
