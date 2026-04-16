@@ -2,8 +2,7 @@ import bcrypt
 import sqlite3
 import os
 from database.db import get_db_connection
-
-DB_PATH = os.path.join(os.path.dirname(__file__), 'rma.db')
+from config import Config
 
 def recreate_and_seed():
     # First, recreate all tables using db.py
@@ -40,6 +39,10 @@ def recreate_and_seed():
     conn.close()
     
     print("\n✅ DONE!")
+    print("\n📝 Default Users:")
+    print("  - super_admin: admin / admin123")
+    print("  - authorizer: auth / auth123")
+    print("  - approver: app / app123")
 
 if __name__ == '__main__':
     recreate_and_seed()

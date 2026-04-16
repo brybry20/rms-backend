@@ -1,4 +1,12 @@
-*.db
-__pycache__/
-*.pyc
+# .gitignore
 .env
+*.pyc
+__pycache__/
+rma.db
+rma.db-journal
+venv/
+env/
+.venv/
+.vscode/
+.DS_Store
+*.log
