@@ -6,7 +6,6 @@ def register_dealer_routes(app):
     
     @app.route('/api/dealer/rma/create', methods=['POST'])
     def create_rma():
-        # Handle form data with files
         data = request.form.to_dict()
         files = request.files.getlist('attachments')
         
@@ -15,11 +14,9 @@ def register_dealer_routes(app):
         if not dealer_id:
             return jsonify({'error': 'dealer_id required'}), 400
         
-        # Convert warranty string to boolean
         if 'warranty' in data:
             data['warranty'] = data['warranty'] == 'true'
         
-        # Handle files - read bytes for Cloudinary
         uploaded_files = []
         for file in files:
             if file and file.filename:
@@ -51,7 +48,6 @@ def register_dealer_routes(app):
         else:
             return jsonify({'error': 'RMA not found'}), 404
     
-    # ✅ PINALITAN: update_dealer_rma (dating update_rma)
     @app.route('/api/dealer/rma/update/<int:rma_id>/<int:dealer_id>', methods=['PUT'])
     def update_dealer_rma(rma_id, dealer_id):
         data = request.get_json()
@@ -62,7 +58,6 @@ def register_dealer_routes(app):
         else:
             return jsonify({'error': result['error']}), 400
     
-    # ✅ PINALITAN: delete_dealer_rma (dating delete_rma)
     @app.route('/api/dealer/rma/delete/<int:rma_id>/<int:dealer_id>', methods=['DELETE'])
     def delete_dealer_rma(rma_id, dealer_id):
         result = RMA.delete(rma_id, dealer_id)
@@ -79,7 +74,7 @@ def register_dealer_routes(app):
         cursor.execute('''
             SELECT dp.company_name, dp.city, dp.barangay
             FROM dealer_profiles dp
-            WHERE dp.user_id = ?
+            WHERE dp.user_id = %s
         ''', (dealer_id,))
         profile = cursor.fetchone()
         cursor.close()

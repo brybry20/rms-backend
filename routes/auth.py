@@ -96,7 +96,6 @@ def register_routes(app):
         existing_users = []
         
         for user_data in default_users:
-            # PostgreSQL uses %s instead of ?
             cursor.execute('SELECT id FROM users WHERE username = %s', (user_data['username'],))
             if cursor.fetchone():
                 existing_users.append(user_data['username'])

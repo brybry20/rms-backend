@@ -69,11 +69,9 @@ def register_approver_routes(app):
     
     @app.route('/api/approver/approve/<int:rma_id>', methods=['PUT'])
     def approve_rma(rma_id):
-        # Handle form data with files
         data = request.form.to_dict()
         files = request.files.getlist('approver_attachments')
         
-        # ✅ Kunin ang attachment_names mula sa request
         attachment_names_json = data.get('attachment_names', '[]')
         try:
             attachment_names = json.loads(attachment_names_json)
@@ -92,7 +90,6 @@ def register_approver_routes(app):
         if not closed_date:
             return jsonify({'error': 'closed_date is required'}), 400
         
-        # Upload files to Cloudinary with original filename
         attachment_urls = []
         for idx, file in enumerate(files):
             if file and file.filename:
@@ -104,7 +101,7 @@ def register_approver_routes(app):
                         resource_type="auto",
                         use_filename=True,
                         unique_filename=False,
-                        filename_override=original_name  # ✅ panatilihin ang orihinal na pangalan
+                        filename_override=original_name
                     )
                     attachment_urls.append({
                         'url': upload_result['secure_url'],
@@ -115,7 +112,6 @@ def register_approver_routes(app):
                         'original_filename': original_name,
                         'filename': original_name
                     })
-                    print(f"Uploaded: {original_name} -> {upload_result['secure_url']}")
                 except Exception as e:
                     print(f"Upload error: {e}")
         
@@ -124,7 +120,7 @@ def register_approver_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT status FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         
         if not row:
@@ -140,16 +136,16 @@ def register_approver_routes(app):
         try:
             cursor.execute('''
                 UPDATE rma_requests SET
-                    approved_by = ?,
-                    approved_date = ?,
-                    approved_with = ?,
-                    replacement_order_no = ?,
-                    closed_date = ?,
-                    approver_comments = ?,
-                    approver_attachments = ?,
+                    approved_by = %s,
+                    approved_date = %s,
+                    approved_with = %s,
+                    replacement_order_no = %s,
+                    closed_date = %s,
+                    approver_comments = %s,
+                    approver_attachments = %s,
                     status = 'approved',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             ''', (approved_by, approved_date, approved_with, replacement_order_no, closed_date, approver_comments, attachments_json, rma_id))
             
             conn.commit()
@@ -180,7 +176,7 @@ def register_approver_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT status FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         
         if not row:
@@ -196,11 +192,11 @@ def register_approver_routes(app):
         try:
             cursor.execute('''
                 UPDATE rma_requests SET
-                    approved_by = ?,
-                    approver_comments = ?,
+                    approved_by = %s,
+                    approver_comments = %s,
                     status = 'rejected',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             ''', (approved_by, approver_comments, rma_id))
             
             conn.commit()
@@ -220,11 +216,9 @@ def register_approver_routes(app):
     
     @app.route('/api/approver/update_approved/<int:rma_id>', methods=['PUT'])
     def update_approved_rma(rma_id):
-        """Update approval details for an already approved RMA"""
         data = request.form.to_dict()
         files = request.files.getlist('approver_attachments')
         
-        # ✅ Kunin ang attachment_names para sa pag-update
         attachment_names_json = data.get('attachment_names', '[]')
         try:
             attachment_names = json.loads(attachment_names_json)
@@ -241,14 +235,13 @@ def register_approver_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT status, approver_attachments FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT status, approver_attachments FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         if not row:
             cursor.close()
             conn.close()
             return jsonify({'error': 'RMA not found'}), 404
         
-        # Process attachments with original filename
         if files:
             attachment_urls = []
             for idx, file in enumerate(files):
@@ -279,15 +272,15 @@ def register_approver_routes(app):
         try:
             cursor.execute('''
                 UPDATE rma_requests SET
-                    approved_by = ?,
-                    approved_date = ?,
-                    approved_with = ?,
-                    replacement_order_no = ?,
-                    closed_date = ?,
-                    approver_comments = ?,
-                    approver_attachments = ?,
+                    approved_by = %s,
+                    approved_date = %s,
+                    approved_with = %s,
+                    replacement_order_no = %s,
+                    closed_date = %s,
+                    approver_comments = %s,
+                    approver_attachments = %s,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             ''', (approved_by, approved_date, approved_with, replacement_order_no, closed_date, approver_comments, attachments_json, rma_id))
             
             conn.commit()
@@ -314,7 +307,7 @@ def register_approver_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT status FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         
         if not row:
@@ -330,11 +323,11 @@ def register_approver_routes(app):
         try:
             cursor.execute('''
                 UPDATE rma_requests SET
-                    approved_by = ?,
-                    approver_comments = ?,
+                    approved_by = %s,
+                    approver_comments = %s,
                     status = 'pending_dealer',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             ''', (approved_by, approver_comments, rma_id))
             
             conn.commit()

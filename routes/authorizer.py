@@ -28,7 +28,6 @@ def register_authorizer_routes(app):
         data = request.form.to_dict()
         files = request.files.getlist('authorizer_attachments')
         
-        # ✅ Kunin ang attachment_names mula sa request
         attachment_names_json = data.get('attachment_names', '[]')
         try:
             attachment_names = json.loads(attachment_names_json)
@@ -48,7 +47,6 @@ def register_authorizer_routes(app):
         if not return_received_by:
             return jsonify({'error': 'return_received_by is required'}), 400
         
-        # Upload files to Cloudinary with original filename
         attachment_urls = []
         for idx, file in enumerate(files):
             if file and file.filename:
@@ -75,7 +73,7 @@ def register_authorizer_routes(app):
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT status FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         if not row:
             cursor.close()
@@ -89,15 +87,15 @@ def register_authorizer_routes(app):
         try:
             cursor.execute('''
                 UPDATE rma_requests SET
-                    authorized_by = ?,
-                    authorized_date = ?,
-                    return_date = ?,
-                    return_received_by = ?,
-                    authorizer_comments = ?,
-                    authorizer_attachments = ?,
+                    authorized_by = %s,
+                    authorized_date = %s,
+                    return_date = %s,
+                    return_received_by = %s,
+                    authorizer_comments = %s,
+                    authorizer_attachments = %s,
                     status = 'authorized',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             ''', (authorized_by, authorized_date, return_date, return_received_by,
                   authorizer_comments, attachments_json, rma_id))
             conn.commit()
@@ -120,7 +118,7 @@ def register_authorizer_routes(app):
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT status FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         if not row:
             cursor.close()
@@ -134,11 +132,11 @@ def register_authorizer_routes(app):
         try:
             cursor.execute('''
                 UPDATE rma_requests SET
-                    authorized_by = ?,
-                    authorizer_comments = ?,
+                    authorized_by = %s,
+                    authorizer_comments = %s,
                     status = 'rejected',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             ''', (authorized_by, authorizer_comments, rma_id))
             conn.commit()
             cursor.close()
@@ -160,7 +158,7 @@ def register_authorizer_routes(app):
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT status FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT status FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         if not row:
             cursor.close()
@@ -174,11 +172,11 @@ def register_authorizer_routes(app):
         try:
             cursor.execute('''
                 UPDATE rma_requests SET
-                    authorized_by = ?,
-                    authorizer_comments = ?,
+                    authorized_by = %s,
+                    authorizer_comments = %s,
                     status = 'pending_dealer',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             ''', (authorized_by, authorizer_comments, rma_id))
             conn.commit()
             cursor.close()
@@ -219,11 +217,9 @@ def register_authorizer_routes(app):
 
     @app.route('/api/authorizer/update_authorized/<int:rma_id>', methods=['PUT'])
     def update_authorized_rma(rma_id):
-        """Update authorization details for an already authorized RMA"""
         data = request.form.to_dict()
         files = request.files.getlist('authorizer_attachments')
         
-        # ✅ Kunin ang attachment_names para sa pag-update
         attachment_names_json = data.get('attachment_names', '[]')
         try:
             attachment_names = json.loads(attachment_names_json)
@@ -245,7 +241,7 @@ def register_authorizer_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT status, authorizer_attachments FROM rma_requests WHERE id = ?', (rma_id,))
+        cursor.execute('SELECT status, authorizer_attachments FROM rma_requests WHERE id = %s', (rma_id,))
         row = cursor.fetchone()
         if not row:
             cursor.close()
@@ -257,7 +253,6 @@ def register_authorizer_routes(app):
             conn.close()
             return jsonify({'error': 'Cannot edit - RMA status is ' + row['status']}), 400
         
-        # Process attachments with original filename
         if files:
             attachment_urls = []
             for idx, file in enumerate(files):
@@ -288,13 +283,13 @@ def register_authorizer_routes(app):
         try:
             cursor.execute('''
                 UPDATE rma_requests SET
-                    authorized_by = ?,
-                    return_date = ?,
-                    return_received_by = ?,
-                    authorizer_comments = ?,
-                    authorizer_attachments = ?,
+                    authorized_by = %s,
+                    return_date = %s,
+                    return_received_by = %s,
+                    authorizer_comments = %s,
+                    authorizer_attachments = %s,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             ''', (authorized_by, return_date, return_received_by, authorizer_comments, attachments_json, rma_id))
             conn.commit()
             cursor.close()
