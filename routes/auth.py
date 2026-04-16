@@ -53,12 +53,10 @@ def register_routes(app):
         
         user = result['user']
         
-        # ✅ Check if dealer is approved
         distributor_name = None
         if user['role'] == 'dealer':
             profile = User.get_dealer_profile(user['id'])
             
-            # ✅ KUNG WALANG PROFILE O HINDI APPROVED, HUWAG PAPAPASUKIN
             if not profile:
                 return jsonify({'error': 'Dealer profile not found'}), 401
             
@@ -81,10 +79,10 @@ def register_routes(app):
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
     
-    # ✅ TEMPORARY ENDPOINT - Create default users (remove after use)
+    # ✅ TEMPORARY ENDPOINT - Create default users (PostgreSQL version)
     @app.route('/api/create-default-users', methods=['POST'])
     def create_default_users():
-        """Temporary endpoint to create all default users"""
+        """Temporary endpoint to create all default users (PostgreSQL compatible)"""
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -92,14 +90,14 @@ def register_routes(app):
             {'username': 'admin', 'password': 'admin123', 'role': 'super_admin', 'email': 'admin@rma.com', 'contact': '09123456789'},
             {'username': 'auth', 'password': 'auth123', 'role': 'authorizer', 'email': 'authorizer@rma.com', 'contact': '09123456788'},
             {'username': 'app', 'password': 'app123', 'role': 'approver', 'email': 'approver@rma.com', 'contact': '09123456787'},
-           
         ]
         
         created_users = []
         existing_users = []
         
         for user_data in default_users:
-            cursor.execute('SELECT id FROM users WHERE username = ?', (user_data['username'],))
+            # PostgreSQL uses %s instead of ?
+            cursor.execute('SELECT id FROM users WHERE username = %s', (user_data['username'],))
             if cursor.fetchone():
                 existing_users.append(user_data['username'])
                 continue
@@ -108,30 +106,22 @@ def register_routes(app):
             
             cursor.execute('''
                 INSERT INTO users (username, password, role, email, contact_number)
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s)
             ''', (user_data['username'], hashed.decode('utf-8'), user_data['role'], user_data['email'], user_data['contact']))
             
-            user_id = cursor.lastrowid
             created_users.append(user_data['username'])
-            
-            if user_data['role'] == 'dealer':
-                cursor.execute('''
-                    INSERT INTO dealer_profiles (user_id, company_name, city, barangay, is_approved)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (user_id, 'Deltaplus Distributor', 'Quezon City', 'Barangay Central', 1))
         
         conn.commit()
         cursor.close()
         conn.close()
         
         return jsonify({
-            'message': 'Default users created!',
+            'message': 'Default users created successfully!',
             'created': created_users,
             'already_exist': existing_users,
             'users': [
                 {'username': 'admin', 'password': 'admin123', 'role': 'super_admin'},
-                {'username': 'authorizer1', 'password': 'auth123', 'role': 'authorizer'},
-                {'username': 'approver1', 'password': 'approve123', 'role': 'approver'},
-                {'username': 'dealer1', 'password': 'dealer123', 'role': 'dealer'},
+                {'username': 'auth', 'password': 'auth123', 'role': 'authorizer'},
+                {'username': 'app', 'password': 'app123', 'role': 'approver'},
             ]
         }), 201
