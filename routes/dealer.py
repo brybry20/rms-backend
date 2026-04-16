@@ -95,3 +95,39 @@ def register_dealer_routes(app):
             return jsonify({'profile': dict(profile)}), 200
         else:
             return jsonify({'profile': None}), 200
+    @app.route('/api/debug-rma-create', methods=['POST'])
+    def debug_rma_create():
+        try:
+            from models.rma import RMA
+            import traceback
+            
+            print("=" * 50)
+            print("DEBUG: RMA Create called")
+            print(f"Form data: {request.form.to_dict()}")
+            print(f"Files: {request.files}")
+            
+            data = request.form.to_dict()
+            files = request.files.getlist('attachments')
+            
+            dealer_id = data.get('dealer_id')
+            if not dealer_id:
+                return jsonify({'error': 'dealer_id required'}), 400
+            
+            if 'warranty' in data:
+                data['warranty'] = data['warranty'] == 'true'
+            
+            uploaded_files = []
+            for file in files:
+                if file and file.filename:
+                    file_bytes = file.read()
+                    uploaded_files.append(file_bytes)
+            
+            result = RMA.create(data, uploaded_files)
+            
+            return jsonify(result), 200 if result['success'] else 400
+            
+        except Exception as e:
+            return jsonify({
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }), 500
