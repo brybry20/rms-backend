@@ -1,15 +1,23 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
 class Config:
-    # SQLite Database
-    DATABASE_PATH = os.getenv('DATABASE_PATH', os.path.join(os.path.dirname(__file__), 'rma.db'))
-    DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+    # Database - Support both SQLite and PostgreSQL
+    DATABASE_URL = os.getenv('DATABASE_URL', '')
+    USE_POSTGRES = DATABASE_URL is not None and DATABASE_URL != ''
     
-    # Cloudinary Configuration (from .env)
+    if USE_POSTGRES:
+        # PostgreSQL (production on Render)
+        DATABASE_PATH = None  # Not used for PostgreSQL
+    else:
+        # SQLite (local development)
+        DATABASE_PATH = os.getenv('DATABASE_PATH', os.path.join(os.path.dirname(__file__), 'rma.db'))
+        DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+    
+    # Cloudinary Configuration
     CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
     CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')
     CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
@@ -20,9 +28,8 @@ class Config:
     DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
     
     # CORS
-    CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:3000').split(',')
     
-    # Validate required configs
     @classmethod
     def validate(cls):
         """Check if all required environment variables are set"""
