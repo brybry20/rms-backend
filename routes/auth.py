@@ -15,10 +15,12 @@ def register_routes(app):
         email = data.get('email')
         contact_number = data.get('contact_number')
         company_name = data.get('company_name')
+        region = data.get('region')
+        province = data.get('province')
         city = data.get('city')
         barangay = data.get('barangay')
         
-        if not all([username, password, email, company_name, city, barangay]):
+        if not all([username, password, email, company_name, region, province, city, barangay]):
             return jsonify({'error': 'All fields are required'}), 400
         
         result = User.create(username, password, 'dealer', email, contact_number)
@@ -28,7 +30,7 @@ def register_routes(app):
         
         user_id = result['user_id']
         
-        profile_result = User.create_dealer_profile(user_id, company_name, city, barangay)
+        profile_result = User.create_dealer_profile(user_id, company_name, region, province, city, barangay)
         
         if not profile_result['success']:
             return jsonify({'error': profile_result['error']}), 400
@@ -80,11 +82,9 @@ def register_routes(app):
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
     
-    # Helper function to get the correct placeholder
     def get_placeholder():
         return '%s' if Config.USE_POSTGRES else '?'
     
-    # ✅ TEMPORARY ENDPOINT - Create default users (works with both SQLite and PostgreSQL)
     @app.route('/api/create-default-users', methods=['POST'])
     def create_default_users():
         """Temporary endpoint to create all default users"""
@@ -105,7 +105,6 @@ def register_routes(app):
         existing_users = []
         
         for user_data in default_users:
-            # Use the correct placeholder for the database
             cursor.execute(f'SELECT id FROM users WHERE username = {placeholder}', (user_data['username'],))
             if cursor.fetchone():
                 existing_users.append(user_data['username'])

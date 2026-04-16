@@ -12,7 +12,7 @@ def register_admin_routes(app):
         
         cursor.execute('''
             SELECT u.id, u.username, u.email, u.contact_number, 
-                   dp.company_name, dp.city, dp.barangay, dp.registered_at
+                   dp.company_name, dp.region, dp.province, dp.city, dp.barangay, dp.registered_at
             FROM users u
             JOIN dealer_profiles dp ON u.id = dp.user_id
             WHERE u.role = 'dealer' AND dp.is_approved = 0
@@ -72,7 +72,7 @@ def register_admin_routes(app):
         
         cursor.execute('''
             SELECT u.id, u.username, u.email, u.contact_number, u.created_at as registered_at,
-                   dp.company_name, dp.city, dp.barangay, dp.is_approved, dp.registered_at
+                   dp.company_name, dp.region, dp.province, dp.city, dp.barangay, dp.is_approved, dp.registered_at
             FROM users u
             JOIN dealer_profiles dp ON u.id = dp.user_id
             WHERE u.role = 'dealer'
@@ -128,7 +128,7 @@ def register_admin_routes(app):
         cursor.execute('''
             SELECT r.*, 
                    u.username as dealer_name, 
-                   dp.company_name, dp.city, dp.barangay,
+                   dp.company_name, dp.region, dp.province, dp.city, dp.barangay,
                    au.username as authorizer_name,
                    ap.username as approver_name
             FROM rma_requests r
@@ -307,7 +307,7 @@ def register_admin_routes(app):
         
         cursor.execute('''
             SELECT u.id, u.username, u.role, u.email, u.contact_number, u.created_at,
-                   dp.company_name, dp.city, dp.barangay, dp.is_approved
+                   dp.company_name, dp.region, dp.province, dp.city, dp.barangay, dp.is_approved
             FROM users u
             LEFT JOIN dealer_profiles dp ON u.id = dp.user_id
             ORDER BY u.created_at DESC
@@ -365,9 +365,10 @@ def register_admin_routes(app):
         
         cursor.execute('''
             UPDATE dealer_profiles 
-            SET company_name = %s, city = %s, barangay = %s
+            SET company_name = %s, region = %s, province = %s, city = %s, barangay = %s
             WHERE user_id = %s
-        ''', (data.get('company_name'), data.get('city'), data.get('barangay'), dealer_id))
+        ''', (data.get('company_name'), data.get('region'), data.get('province'), 
+              data.get('city'), data.get('barangay'), dealer_id))
         
         conn.commit()
         cursor.close()

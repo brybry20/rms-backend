@@ -61,12 +61,14 @@ def init_db():
             )
         ''')
         
-        # Dealer profiles
+        # Dealer profiles with region and province
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS dealer_profiles (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER UNIQUE,
                 company_name TEXT,
+                region TEXT,
+                province TEXT,
                 city TEXT,
                 barangay TEXT,
                 is_approved INTEGER DEFAULT 0,
@@ -137,6 +139,19 @@ def init_db():
                 FOREIGN KEY (related_rma_id) REFERENCES rma_requests (id) ON DELETE CASCADE
             )
         ''')
+        
+        # Add missing columns for existing databases
+        try:
+            cursor.execute("ALTER TABLE dealer_profiles ADD COLUMN region TEXT")
+            print("✅ Added region column")
+        except:
+            pass
+        
+        try:
+            cursor.execute("ALTER TABLE dealer_profiles ADD COLUMN province TEXT")
+            print("✅ Added province column")
+        except:
+            pass
         
         # Indexes
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)')
@@ -186,12 +201,14 @@ def init_db():
             )
         ''')
         
-        # Dealer profiles
+        # Dealer profiles with region and province
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS dealer_profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER UNIQUE,
                 company_name TEXT,
+                region TEXT,
+                province TEXT,
                 city TEXT,
                 barangay TEXT,
                 is_approved INTEGER DEFAULT 0,
@@ -262,6 +279,19 @@ def init_db():
                 FOREIGN KEY (related_rma_id) REFERENCES rma_requests (id) ON DELETE CASCADE
             )
         ''')
+        
+        # Add missing columns for existing databases
+        try:
+            cursor.execute("ALTER TABLE dealer_profiles ADD COLUMN region TEXT")
+            print("✅ Added region column")
+        except:
+            pass
+        
+        try:
+            cursor.execute("ALTER TABLE dealer_profiles ADD COLUMN province TEXT")
+            print("✅ Added province column")
+        except:
+            pass
         
         # Indexes for SQLite
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)')

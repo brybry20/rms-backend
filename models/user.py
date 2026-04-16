@@ -49,12 +49,9 @@ class User:
         conn.close()
         
         if user:
-            # Convert to dictionary based on database type
             if Config.USE_POSTGRES:
-                # For PostgreSQL, user is already a RealDictRow
                 return dict(user)
             else:
-                # For SQLite
                 columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
                 return dict(zip(columns, user))
         return None
@@ -90,8 +87,8 @@ class User:
         return {'success': False, 'error': 'Invalid username or password'}
     
     @staticmethod
-    def create_dealer_profile(user_id, company_name, city, barangay):
-        """Create dealer profile after registration"""
+    def create_dealer_profile(user_id, company_name, region, province, city, barangay):
+        """Create dealer profile after registration with region and province"""
         conn = get_db_connection()
         if not conn:
             return {'success': False, 'error': 'Database connection failed'}
@@ -101,9 +98,9 @@ class User:
         
         try:
             cursor.execute(f'''
-                INSERT INTO dealer_profiles (user_id, company_name, city, barangay)
-                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})
-            ''', (user_id, company_name, city, barangay))
+                INSERT INTO dealer_profiles (user_id, company_name, region, province, city, barangay)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+            ''', (user_id, company_name, region, province, city, barangay))
             conn.commit()
             cursor.close()
             conn.close()
@@ -124,7 +121,7 @@ class User:
         cursor = conn.cursor()
         placeholder = get_placeholder()
         cursor.execute(f'''
-            SELECT company_name, city, barangay, is_approved 
+            SELECT company_name, region, province, city, barangay, is_approved 
             FROM dealer_profiles WHERE user_id = {placeholder}
         ''', (user_id,))
         profile = cursor.fetchone()
@@ -135,7 +132,7 @@ class User:
             if Config.USE_POSTGRES:
                 return dict(profile)
             else:
-                columns = ['company_name', 'city', 'barangay', 'is_approved']
+                columns = ['company_name', 'region', 'province', 'city', 'barangay', 'is_approved']
                 return dict(zip(columns, profile))
         return None
     
