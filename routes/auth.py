@@ -1,6 +1,6 @@
 from flask import request, jsonify
 from models.user import User
-from database.db import get_db_connection
+from database.db import get_db_connection, get_placeholder
 from config import Config
 import bcrypt
 
@@ -20,7 +20,7 @@ def register_routes(app):
         city = data.get('city')
         barangay = data.get('barangay')
         
-        # Check for missing fields and return which ones are missing
+        # Check for missing fields
         missing_fields = []
         if not username: missing_fields.append('username')
         if not password: missing_fields.append('password')
@@ -92,9 +92,6 @@ def register_routes(app):
     @app.route('/api/health', methods=['GET'])
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
-    
-    def get_placeholder():
-        return '%s' if Config.USE_POSTGRES else '?'
     
     @app.route('/api/create-default-users', methods=['POST'])
     def create_default_users():
