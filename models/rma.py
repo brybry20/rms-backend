@@ -1,5 +1,6 @@
 import json
 from database.db import get_db_connection, get_placeholder
+from config import Config
 import cloudinary
 import cloudinary.uploader
 from datetime import datetime
@@ -12,8 +13,14 @@ class RMA:
         cursor = conn.cursor()
         current_date = datetime.now().strftime("%m%d%Y")
         placeholder = get_placeholder()
-        cursor.execute(f'SELECT COUNT(*) FROM rma_requests WHERE rma_number LIKE {placeholder}', (f'RMA-{current_date}-%',))
-        count = cursor.fetchone()[0]
+        cursor.execute(f'SELECT COUNT(*) as count FROM rma_requests WHERE rma_number LIKE {placeholder}', (f'RMA-{current_date}-%',))
+        row = cursor.fetchone()
+        
+        if Config.USE_POSTGRES:
+            count = row['count'] if row else 0
+        else:
+            count = row[0] if row else 0
+            
         cursor.close()
         conn.close()
         sequence = str(count + 1).zfill(3)
@@ -88,7 +95,13 @@ class RMA:
                 data.get('problem_description'), data.get('dealer_comments'),
                 attachments_json, 'pending_authorizer'
             ))
-            rma_id = cursor.lastrowid
+            
+            if Config.USE_POSTGRES:
+                cursor.execute('SELECT LASTVAL()')
+                rma_id = cursor.fetchone()[0]
+            else:
+                rma_id = cursor.lastrowid
+                
             conn.commit()
             cursor.close()
             conn.close()
