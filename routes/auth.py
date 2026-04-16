@@ -20,8 +20,19 @@ def register_routes(app):
         city = data.get('city')
         barangay = data.get('barangay')
         
-        if not all([username, password, email, company_name, region, province, city, barangay]):
-            return jsonify({'error': 'All fields are required'}), 400
+        # Check for missing fields and return which ones are missing
+        missing_fields = []
+        if not username: missing_fields.append('username')
+        if not password: missing_fields.append('password')
+        if not email: missing_fields.append('email')
+        if not company_name: missing_fields.append('company_name')
+        if not region: missing_fields.append('region')
+        if not province: missing_fields.append('province')
+        if not city: missing_fields.append('city')
+        if not barangay: missing_fields.append('barangay')
+        
+        if missing_fields:
+            return jsonify({'error': f'Missing fields: {", ".join(missing_fields)}'}), 400
         
         result = User.create(username, password, 'dealer', email, contact_number)
         
