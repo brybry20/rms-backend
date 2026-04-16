@@ -93,6 +93,45 @@ def register_routes(app):
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
     
+    @app.route('/api/debug-register', methods=['POST'])
+    def debug_register():
+        try:
+            data = request.get_json()
+            print(f"Received data: {data}")
+            
+            username = data.get('username')
+            password = data.get('password')
+            email = data.get('email')
+            contact_number = data.get('contact_number')
+            company_name = data.get('company_name')
+            region = data.get('region')
+            province = data.get('province')
+            city = data.get('city')
+            barangay = data.get('barangay')
+            
+            # Simple check muna
+            if not username:
+                return jsonify({'error': 'username is missing'}), 400
+            if not password:
+                return jsonify({'error': 'password is missing'}), 400
+            if not email:
+                return jsonify({'error': 'email is missing'}), 400
+            if not company_name:
+                return jsonify({'error': 'company_name is missing'}), 400
+            if not region:
+                return jsonify({'error': 'region is missing'}), 400
+            if not province:
+                return jsonify({'error': 'province is missing'}), 400
+            if not city:
+                return jsonify({'error': 'city is missing'}), 400
+            if not barangay:
+                return jsonify({'error': 'barangay is missing'}), 400
+            
+            return jsonify({'message': 'All fields present!'}), 200
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500   
+
     @app.route('/api/create-default-users', methods=['POST'])
     def create_default_users():
         """Temporary endpoint to create all default users"""
