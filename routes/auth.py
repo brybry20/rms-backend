@@ -93,11 +93,11 @@ def register_routes(app):
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
     
-    @app.route('/api/debug-register', methods=['POST'])
-    def debug_register():
+    @app.route('/api/debug-register-full', methods=['POST'])
+    def debug_register_full():
         try:
+            from models.user import User
             data = request.get_json()
-            print(f"Received data: {data}")
             
             username = data.get('username')
             password = data.get('password')
@@ -109,29 +109,33 @@ def register_routes(app):
             city = data.get('city')
             barangay = data.get('barangay')
             
-            # Simple check muna
-            if not username:
-                return jsonify({'error': 'username is missing'}), 400
-            if not password:
-                return jsonify({'error': 'password is missing'}), 400
-            if not email:
-                return jsonify({'error': 'email is missing'}), 400
-            if not company_name:
-                return jsonify({'error': 'company_name is missing'}), 400
-            if not region:
-                return jsonify({'error': 'region is missing'}), 400
-            if not province:
-                return jsonify({'error': 'province is missing'}), 400
-            if not city:
-                return jsonify({'error': 'city is missing'}), 400
-            if not barangay:
-                return jsonify({'error': 'barangay is missing'}), 400
+            # Test User.create
+            print("Creating user...")
+            result = User.create(username, password, 'dealer', email, contact_number)
+            print(f"User.create result: {result}")
             
-            return jsonify({'message': 'All fields present!'}), 200
+            if not result['success']:
+                return jsonify({'error': f'User.create failed: {result["error"]}'}), 400
+            
+            user_id = result['user_id']
+            
+            # Test create_dealer_profile
+            print("Creating dealer profile...")
+            profile_result = User.create_dealer_profile(user_id, company_name, region, province, city, barangay)
+            print(f"Profile result: {profile_result}")
+            
+            if not profile_result['success']:
+                return jsonify({'error': f'create_dealer_profile failed: {profile_result["error"]}'}), 400
+            
+            return jsonify({
+                'message': 'Registration successful!',
+                'user_id': user_id
+            }), 201
             
         except Exception as e:
-            return jsonify({'error': str(e)}), 500   
-
+            import traceback
+            return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+    
     @app.route('/api/create-default-users', methods=['POST'])
     def create_default_users():
         """Temporary endpoint to create all default users"""
