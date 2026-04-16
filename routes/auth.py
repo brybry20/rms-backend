@@ -93,6 +93,12 @@ def register_routes(app):
     def health_check():
         return jsonify({'status': 'ok', 'message': 'RMA System API is running'}), 200
     
+    @app.route('/api/reset-database', methods=['POST'])
+    def reset_database():
+        from database.db import reset_database as reset_db
+        reset_db()
+        return jsonify({'message': 'Database reset successfully!'}), 200
+
     @app.route('/api/debug-register-full', methods=['POST'])
     def debug_register_full():
         try:
