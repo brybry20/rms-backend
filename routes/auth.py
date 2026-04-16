@@ -95,9 +95,12 @@ def register_routes(app):
     
     @app.route('/api/reset-database', methods=['POST'])
     def reset_database():
-        from database.db import reset_database as reset_db
-        reset_db()
-        return jsonify({'message': 'Database reset successfully!'}), 200
+        try:
+            from database.db import reset_database as reset_db
+            reset_db()
+            return jsonify({'message': 'Database reset successfully! All tables recreated.'}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/debug-register-full', methods=['POST'])
     def debug_register_full():
