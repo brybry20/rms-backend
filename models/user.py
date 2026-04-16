@@ -24,14 +24,21 @@ class User:
             
             # Get the last inserted ID
             cursor.execute(f'SELECT id FROM users WHERE username = {placeholder}', (username,))
-            user_id = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            if row:
+                user_id = row[0] if not Config.USE_POSTGRES else row['id']
+            else:
+                user_id = None
+            
             cursor.close()
             conn.close()
             return {'success': True, 'user_id': user_id}
+            
         except Exception as e:
             conn.rollback()
             cursor.close()
             conn.close()
+            # Return the actual error message
             return {'success': False, 'error': str(e)}
     
     @staticmethod
