@@ -49,10 +49,12 @@ class User:
         conn.close()
         
         if user:
+            # Convert to dictionary based on database type
             if Config.USE_POSTGRES:
+                # For PostgreSQL, user is already a RealDictRow
                 return dict(user)
             else:
-                # SQLite: Convert Row to dictionary
+                # For SQLite
                 columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
                 return dict(zip(columns, user))
         return None
@@ -75,7 +77,6 @@ class User:
             if Config.USE_POSTGRES:
                 return dict(user)
             else:
-                # SQLite: Convert Row to dictionary
                 columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
                 return dict(zip(columns, user))
         return None
