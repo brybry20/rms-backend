@@ -46,7 +46,7 @@ def register_admin_routes(app):
         cursor.execute('''
             SELECT u.id FROM users u
             JOIN dealer_profiles dp ON u.id = dp.user_id
-            WHERE u.id = %s AND u.role = 'dealer' AND dp.is_approved = 0
+            WHERE u.id = ? AND u.role = 'dealer' AND dp.is_approved = 0
         ''', (user_id,))
         
         if not cursor.fetchone():
@@ -54,8 +54,8 @@ def register_admin_routes(app):
             conn.close()
             return jsonify({'error': 'Dealer not found or already approved'}), 404
         
-        cursor.execute('DELETE FROM dealer_profiles WHERE user_id = %s', (user_id,))
-        cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
+        cursor.execute('DELETE FROM dealer_profiles WHERE user_id = ?', (user_id,))
+        cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
         
         conn.commit()
         cursor.close()
@@ -105,8 +105,8 @@ def register_admin_routes(app):
             FROM rma_requests r
             JOIN users u ON r.dealer_id = u.id
             JOIN dealer_profiles dp ON u.id = dp.user_id
-            LEFT JOIN users au ON r.authorized_by::text = au.id::text
-            LEFT JOIN users ap ON r.approved_by::text = ap.id::text
+            LEFT JOIN users au ON r.authorized_by = au.id
+            LEFT JOIN users ap ON r.approved_by = ap.id
             ORDER BY r.created_at DESC
         ''')
         
@@ -135,9 +135,9 @@ def register_admin_routes(app):
             FROM rma_requests r
             JOIN users u ON r.dealer_id = u.id
             JOIN dealer_profiles dp ON u.id = dp.user_id
-            LEFT JOIN users au ON r.authorized_by::text = au.id::text
-            LEFT JOIN users ap ON r.approved_by::text = ap.id::text
-            WHERE r.id = %s
+            LEFT JOIN users au ON r.authorized_by = au.id
+            LEFT JOIN users ap ON r.approved_by = ap.id
+            WHERE r.id = ?
         ''', (rma_id,))
         
         row = cursor.fetchone()
@@ -159,7 +159,7 @@ def register_admin_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT id FROM rma_requests WHERE id = %s', (rma_id,))
+        cursor.execute('SELECT id FROM rma_requests WHERE id = ?', (rma_id,))
         if not cursor.fetchone():
             cursor.close()
             conn.close()
@@ -181,7 +181,7 @@ def register_admin_routes(app):
         
         for field in allowed_fields:
             if field in data:
-                set_clause.append(f"{field} = %s")
+                set_clause.append(f"{field} = ?")
                 if field == 'warranty':
                     values.append(1 if data[field] else 0)
                 else:
@@ -197,7 +197,7 @@ def register_admin_routes(app):
         query = f'''
             UPDATE rma_requests 
             SET {', '.join(set_clause)}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
+            WHERE id = ?
         '''
         cursor.execute(query, values)
         conn.commit()
@@ -217,7 +217,7 @@ def register_admin_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT attachments, authorizer_attachments, approver_attachments FROM rma_requests WHERE id = %s', (rma_id,))
+        cursor.execute('SELECT attachments, authorizer_attachments, approver_attachments FROM rma_requests WHERE id = ?', (rma_id,))
         row = cursor.fetchone()
         
         if not row:
@@ -246,7 +246,7 @@ def register_admin_routes(app):
         except Exception as e:
             print(f"Error deleting from Cloudinary: {e}")
         
-        cursor.execute('DELETE FROM rma_requests WHERE id = %s', (rma_id,))
+        cursor.execute('DELETE FROM rma_requests WHERE id = ?', (rma_id,))
         conn.commit()
         
         cursor.close()
@@ -358,14 +358,14 @@ def register_admin_routes(app):
         
         cursor.execute('''
             UPDATE users 
-            SET username = %s, email = %s, contact_number = %s
-            WHERE id = %s AND role = 'dealer'
+            SET username = ?, email = ?, contact_number = ?
+            WHERE id = ? AND role = 'dealer'
         ''', (data.get('username'), data.get('email'), data.get('contact_number'), dealer_id))
         
         cursor.execute('''
             UPDATE dealer_profiles 
-            SET company_name = %s, city = %s, barangay = %s
-            WHERE user_id = %s
+            SET company_name = ?, city = ?, barangay = ?
+            WHERE user_id = ?
         ''', (data.get('company_name'), data.get('city'), data.get('barangay'), dealer_id))
         
         conn.commit()
@@ -392,8 +392,8 @@ def register_admin_routes(app):
         
         cursor.execute('''
             UPDATE users 
-            SET password = %s
-            WHERE id = %s AND role = 'dealer'
+            SET password = ?
+            WHERE id = ? AND role = 'dealer'
         ''', (hashed.decode('utf-8'), dealer_id))
         
         conn.commit()

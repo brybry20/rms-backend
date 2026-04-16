@@ -99,7 +99,7 @@ def register_routes(app):
         existing_users = []
         
         for user_data in default_users:
-            cursor.execute('SELECT id FROM users WHERE username = %s', (user_data['username'],))
+            cursor.execute('SELECT id FROM users WHERE username = ?', (user_data['username'],))
             if cursor.fetchone():
                 existing_users.append(user_data['username'])
                 continue
@@ -108,7 +108,7 @@ def register_routes(app):
             
             cursor.execute('''
                 INSERT INTO users (username, password, role, email, contact_number)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?)
             ''', (user_data['username'], hashed.decode('utf-8'), user_data['role'], user_data['email'], user_data['contact']))
             
             user_id = cursor.lastrowid
@@ -117,7 +117,7 @@ def register_routes(app):
             if user_data['role'] == 'dealer':
                 cursor.execute('''
                     INSERT INTO dealer_profiles (user_id, company_name, city, barangay, is_approved)
-                    VALUES (%s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?)
                 ''', (user_id, 'Deltaplus Distributor', 'Quezon City', 'Barangay Central', 1))
         
         conn.commit()

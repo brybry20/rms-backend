@@ -21,7 +21,14 @@ cloudinary.config(
     api_secret=Config.CLOUDINARY_API_SECRET
 )
 
-CORS(app, origins=Config.CORS_ORIGINS)
+# ✅ TAMANG CORS CONFIGURATION
+CORS(app, resources={
+    r"/api/*": {
+        "origins": Config.CORS_ORIGINS,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 init_db()
 

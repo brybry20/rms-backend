@@ -1,27 +1,19 @@
 import sqlite3
 import os
-from config import Config
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATABASE_PATH = os.path.join(BASE_DIR, 'rma.db')
 
 def get_db_connection():
-    """Create database connection to SQLite"""
-    try:
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        conn.row_factory = sqlite3.Row  # Para makuha ang columns as dictionary
-        return conn
-    except Exception as e:
-        print(f"❌ Database connection error: {e}")
-        return None
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
-    """Initialize all tables"""
     conn = get_db_connection()
-    if not conn:
-        print("❌ Failed to connect to database")
-        return
-    
     cursor = conn.cursor()
     
-    # Users table (lahat ng users)
+    # Users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,8 +35,7 @@ def init_db():
             city TEXT,
             barangay TEXT,
             is_approved INTEGER DEFAULT 0,
-            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
+            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
@@ -54,70 +45,44 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             rma_number TEXT UNIQUE NOT NULL,
             dealer_id INTEGER,
-            
-            -- Return Merchandise Authorization
             return_type TEXT,
             reason_for_return TEXT,
             warranty INTEGER DEFAULT 0,
+            filer_name TEXT,
+            distributor_name TEXT,
+            date_filled TEXT,
+            product TEXT,
             product_description TEXT,
             work_environment TEXT,
-            distributor_name TEXT,
             po_number TEXT,
             sales_invoice_number TEXT,
             shipping_date TEXT,
             return_date TEXT,
-            
-            -- End User Details
             end_user_company TEXT,
             end_user_location TEXT,
             end_user_industry TEXT,
             end_user_contact_person TEXT,
-            
-            -- Problem & Comments
             problem_description TEXT,
             dealer_comments TEXT,
-            
-            -- Authorization Details
-            authorized_by INTEGER,
+            authorized_by TEXT,
             authorized_date TEXT,
             return_received_by TEXT,
             authorizer_comments TEXT,
-            
-            -- Approval Details
-            approved_by INTEGER,
+            approved_by TEXT,
             approved_date TEXT,
             approved_with TEXT,
             replacement_order_no TEXT,
             closed_date TEXT,
             approver_comments TEXT,
-            
-            -- Status
+            attachments TEXT,
+            authorizer_attachments TEXT,
+            approver_attachments TEXT,
             status TEXT DEFAULT 'pending_dealer',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (dealer_id) REFERENCES users (id),
-            FOREIGN KEY (authorized_by) REFERENCES users (id),
-            FOREIGN KEY (approved_by) REFERENCES users (id)
-        )
-    ''')
-    
-    # Notifications table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            title TEXT,
-            message TEXT,
-            type TEXT,
-            is_read INTEGER DEFAULT 0,
-            related_rma_id INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id),
-            FOREIGN KEY (related_rma_id) REFERENCES rma_requests (id)
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
     conn.commit()
-    cursor.close()
     conn.close()
-    print("✅ SQLite database and tables created successfully!")
+    print("✅ Database initialized!")
