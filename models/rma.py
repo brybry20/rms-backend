@@ -28,47 +28,81 @@ class RMA:
     
     @staticmethod
     def create(data, files=None):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        rma_number = RMA.generate_rma_number()
-        placeholder = get_placeholder()
-        
-        # Kunin ang attachment_names galing sa form data
-        attachment_names = data.get('attachment_names', '[]')
-        if isinstance(attachment_names, str):
-            try:
-                attachment_names = json.loads(attachment_names)
-            except:
-                attachment_names = []
-        
-        attachment_urls = []
-        if files:
-            for idx, file_data in enumerate(files):
-                try:
-                    original_name = attachment_names[idx] if idx < len(attachment_names) else f"file_{idx+1}"
-                    upload_result = cloudinary.uploader.upload(
-                        file_data,
-                        folder=f"rma_attachments/{rma_number}",
-                        resource_type="auto",
-                        use_filename=True,
-                        unique_filename=False,
-                        filename_override=original_name
-                    )
-                    attachment_urls.append({
-                        'url': upload_result['secure_url'],
-                        'public_id': upload_result['public_id'],
-                        'resource_type': upload_result['resource_type'],
-                        'format': upload_result.get('format', ''),
-                        'bytes': upload_result.get('bytes', 0),
-                        'original_filename': original_name,
-                        'filename': original_name
-                    })
-                except Exception as e:
-                    print(f"Upload error: {e}")
-        
-        attachments_json = json.dumps(attachment_urls) if attachment_urls else None
-        
+        """Create RMA request with proper error handling"""
         try:
+            print("=" * 50)
+            print("RMA.create called")
+            print(f"Data received: {data}")
+            print(f"Files received: {files is not None}")
+            
+            # Check required fields
+            required_fields = [
+                'dealer_id', 'return_type', 'reason_for_return', 'filer_name',
+                'distributor_name', 'date_filled', 'product', 'product_description',
+                'work_environment', 'po_number', 'sales_invoice_number',
+                'shipping_date', 'return_date', 'end_user_company', 'end_user_location',
+                'end_user_industry', 'end_user_contact_person', 'problem_description',
+                'dealer_comments'
+            ]
+            
+            missing_fields = []
+            for field in required_fields:
+                if not data.get(field):
+                    missing_fields.append(field)
+            
+            if missing_fields:
+                return {
+                    'success': False, 
+                    'error': f'Missing required fields: {", ".join(missing_fields)}'
+                }
+            
+            conn = get_db_connection()
+            if not conn:
+                return {'success': False, 'error': 'Database connection failed'}
+            
+            cursor = conn.cursor()
+            rma_number = RMA.generate_rma_number()
+            placeholder = get_placeholder()
+            
+            # Kunin ang attachment_names galing sa form data
+            attachment_names = data.get('attachment_names', '[]')
+            if isinstance(attachment_names, str):
+                try:
+                    attachment_names = json.loads(attachment_names)
+                except:
+                    attachment_names = []
+            
+            attachment_urls = []
+            if files:
+                for idx, file_data in enumerate(files):
+                    try:
+                        original_name = attachment_names[idx] if idx < len(attachment_names) else f"file_{idx+1}"
+                        upload_result = cloudinary.uploader.upload(
+                            file_data,
+                            folder=f"rma_attachments/{rma_number}",
+                            resource_type="auto",
+                            use_filename=True,
+                            unique_filename=False,
+                            filename_override=original_name
+                        )
+                        attachment_urls.append({
+                            'url': upload_result['secure_url'],
+                            'public_id': upload_result['public_id'],
+                            'resource_type': upload_result['resource_type'],
+                            'format': upload_result.get('format', ''),
+                            'bytes': upload_result.get('bytes', 0),
+                            'original_filename': original_name,
+                            'filename': original_name
+                        })
+                    except Exception as e:
+                        print(f"Upload error: {e}")
+            
+            attachments_json = json.dumps(attachment_urls) if attachment_urls else None
+            
+            # Convert warranty to integer
+            warranty_value = 1 if data.get('warranty') in ['true', 'True', True, 1, '1'] else 0
+            
+            # Execute insert
             cursor.execute(f'''
                 INSERT INTO rma_requests (
                     rma_number, dealer_id,
@@ -81,11 +115,14 @@ class RMA:
                     end_user_industry, end_user_contact_person,
                     problem_description, dealer_comments,
                     attachments, status
-                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
+                ) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 
+                          {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
+                          {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
+                          {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder},
+                          {placeholder}, {placeholder}, {placeholder})
             ''', (
                 rma_number, int(data.get('dealer_id')),
-                data.get('return_type'), data.get('reason_for_return'),
-                1 if data.get('warranty') == 'true' or data.get('warranty') == True else 0,
+                data.get('return_type'), data.get('reason_for_return'), warranty_value,
                 data.get('filer_name'), data.get('distributor_name'), data.get('date_filled'), data.get('product'), data.get('product_description'),
                 data.get('work_environment'),
                 data.get('po_number'), data.get('sales_invoice_number'),
@@ -96,6 +133,7 @@ class RMA:
                 attachments_json, 'pending_authorizer'
             ))
             
+            # Get the last inserted ID
             if Config.USE_POSTGRES:
                 cursor.execute('SELECT LASTVAL()')
                 rma_id = cursor.fetchone()[0]
@@ -105,11 +143,27 @@ class RMA:
             conn.commit()
             cursor.close()
             conn.close()
-            return {'success': True, 'rma_id': rma_id, 'rma_number': rma_number, 'attachments': attachment_urls}
+            
+            print(f"RMA created successfully: {rma_number} (ID: {rma_id})")
+            
+            return {
+                'success': True, 
+                'rma_id': rma_id, 
+                'rma_number': rma_number, 
+                'attachments': attachment_urls
+            }
+            
         except Exception as e:
-            conn.rollback()
-            cursor.close()
-            conn.close()
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"Error in RMA.create: {error_detail}")
+            
+            # Rollback if connection exists
+            if 'conn' in locals() and conn:
+                conn.rollback()
+                cursor.close()
+                conn.close()
+                
             return {'success': False, 'error': str(e)}
     
     @staticmethod
@@ -123,7 +177,10 @@ class RMA:
         for row in rows:
             rma_dict = dict(row)
             if rma_dict.get('attachments'):
-                rma_dict['attachments'] = json.loads(rma_dict['attachments'])
+                try:
+                    rma_dict['attachments'] = json.loads(rma_dict['attachments'])
+                except:
+                    rma_dict['attachments'] = []
             rmas.append(rma_dict)
         cursor.close()
         conn.close()
@@ -144,7 +201,10 @@ class RMA:
         if row:
             rma_dict = dict(row)
             if rma_dict.get('attachments'):
-                rma_dict['attachments'] = json.loads(rma_dict['attachments'])
+                try:
+                    rma_dict['attachments'] = json.loads(rma_dict['attachments'])
+                except:
+                    rma_dict['attachments'] = []
             return rma_dict
         return None
     
