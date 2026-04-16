@@ -45,7 +45,9 @@ class User:
         conn.close()
         
         if user:
-            return dict(user)
+            # Convert tuple to dictionary manually
+            columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
+            return dict(zip(columns, user))
         return None
     
     @staticmethod
@@ -62,7 +64,9 @@ class User:
         conn.close()
         
         if user:
-            return dict(user)
+            # Convert tuple to dictionary manually
+            columns = ['id', 'username', 'password', 'role', 'email', 'contact_number', 'created_at']
+            return dict(zip(columns, user))
         return None
     
     @staticmethod
@@ -114,7 +118,8 @@ class User:
         conn.close()
         
         if profile:
-            return dict(profile)
+            columns = ['company_name', 'city', 'barangay', 'is_approved']
+            return dict(zip(columns, profile))
         return None
     
     @staticmethod
