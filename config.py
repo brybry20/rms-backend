@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    # MongoDB Configuration (same for local and production)
+    # MongoDB Configuration
     MONGO_URI = os.getenv('MONGO_URI')
     MONGO_DATABASE = os.getenv('MONGO_DATABASE', 'rma_system')
     
@@ -15,11 +15,14 @@ class Config:
     
     # App
     SECRET_KEY = os.getenv('SECRET_KEY', 'rma-secret-key-2024')
-    PORT = int(os.getenv('PORT', 5000))
-    DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+    PORT = int(os.getenv('PORT', 10000))  # Change default to 10000
+    DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
     
     # CORS
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:3000').split(',')
+    
+    # Environment detection
+    IS_RENDER = os.getenv('RENDER', 'False').lower() == 'true'
     
     @classmethod
     def validate(cls):

@@ -53,4 +53,5 @@ register_approver_routes(app)
 print("✅ All routes registered!")
 
 if __name__ == '__main__':
-    app.run(debug=app.config['DEBUG'], port=app.config['PORT'])
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=app.config['DEBUG'])
