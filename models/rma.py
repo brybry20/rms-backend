@@ -9,9 +9,24 @@ class RMA:
     
     @staticmethod
     def _serialize(doc):
-        """Convert MongoDB document to dictionary with string id"""
-        if doc:
-            doc['id'] = str(doc.pop('_id'))
+        """Convert MongoDB document and nested objects to dictionary with string ids"""
+        if not doc:
+            return doc
+        
+        if isinstance(doc, list):
+            return [RMA._serialize(x) for x in doc]
+            
+        if isinstance(doc, dict):
+            # Handle the main ID
+            if '_id' in doc:
+                doc['id'] = str(doc.pop('_id'))
+            
+            # Recursively handle all other fields
+            for key, value in doc.items():
+                if isinstance(value, ObjectId):
+                    doc[key] = str(value)
+                elif isinstance(value, (dict, list)):
+                    doc[key] = RMA._serialize(value)
         return doc
     
     @staticmethod
