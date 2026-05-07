@@ -276,7 +276,7 @@ class RMA:
             }},
             {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}},
             {"$addFields": {
-                "company_name": "$profile.company_name"
+                "company_name": { "$ifNull": ["$profile.company_name", "$distributor_name", "N/A"] }
             }},
             {"$sort": {"created_at": -1}}
         ]
@@ -308,7 +308,7 @@ class RMA:
             }},
             {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}},
             {"$addFields": {
-                "company_name": "$profile.company_name"
+                "company_name": { "$ifNull": ["$profile.company_name", "$distributor_name", "N/A"] }
             }},
             {"$sort": {"created_at": 1}}
         ]
@@ -339,7 +339,7 @@ class RMA:
             }},
             {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}},
             {"$addFields": {
-                "company_name": "$profile.company_name"
+                "company_name": { "$ifNull": ["$profile.company_name", "$distributor_name", "N/A"] }
             }},
             {"$sort": {"authorized_date": 1}}
         ]
