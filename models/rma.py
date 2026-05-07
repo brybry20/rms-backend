@@ -258,9 +258,12 @@ class RMA:
         db = get_db_connection()
         
         pipeline = [
+            {"$addFields": {
+                "dealer_id_obj": { "$toObjectId": "$dealer_id" }
+            }},
             {"$lookup": {
                 "from": "users",
-                "localField": "dealer_id",
+                "localField": "dealer_id_obj",
                 "foreignField": "_id",
                 "as": "dealer"
             }},
@@ -272,24 +275,75 @@ class RMA:
                 "as": "profile"
             }},
             {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}},
+            {"$addFields": {
+                "company_name": "$profile.company_name"
+            }},
             {"$sort": {"created_at": -1}}
         ]
         
         rmas = list(db.rma_requests.aggregate(pipeline))
         return [RMA._serialize(r) for r in rmas]
-    
+
     @staticmethod
     def get_pending_for_authorizer():
-        """Get all RMAs pending for authorizer"""
+        """Get all RMAs pending for authorizer with dealer info"""
         db = get_db_connection()
-        rmas = list(db.rma_requests.find({"status": "pending_authorizer"}).sort("created_at", 1))
+        pipeline = [
+            {"$match": {"status": "pending_authorizer"}},
+            {"$addFields": {
+                "dealer_id_obj": { "$toObjectId": "$dealer_id" }
+            }},
+            {"$lookup": {
+                "from": "users",
+                "localField": "dealer_id_obj",
+                "foreignField": "_id",
+                "as": "dealer"
+            }},
+            {"$unwind": {"path": "$dealer", "preserveNullAndEmptyArrays": True}},
+            {"$lookup": {
+                "from": "dealer_profiles",
+                "localField": "dealer._id",
+                "foreignField": "user_id",
+                "as": "profile"
+            }},
+            {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}},
+            {"$addFields": {
+                "company_name": "$profile.company_name"
+            }},
+            {"$sort": {"created_at": 1}}
+        ]
+        rmas = list(db.rma_requests.aggregate(pipeline))
         return [RMA._serialize(r) for r in rmas]
-    
+
     @staticmethod
     def get_pending_for_approver():
-        """Get all RMAs pending for approver (authorized)"""
+        """Get all RMAs pending for approver (authorized) with dealer info"""
         db = get_db_connection()
-        rmas = list(db.rma_requests.find({"status": "authorized"}).sort("authorized_date", 1))
+        pipeline = [
+            {"$match": {"status": "authorized"}},
+            {"$addFields": {
+                "dealer_id_obj": { "$toObjectId": "$dealer_id" }
+            }},
+            {"$lookup": {
+                "from": "users",
+                "localField": "dealer_id_obj",
+                "foreignField": "_id",
+                "as": "dealer"
+            }},
+            {"$unwind": {"path": "$dealer", "preserveNullAndEmptyArrays": True}},
+            {"$lookup": {
+                "from": "dealer_profiles",
+                "localField": "dealer._id",
+                "foreignField": "user_id",
+                "as": "profile"
+            }},
+            {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}},
+            {"$addFields": {
+                "company_name": "$profile.company_name"
+            }},
+            {"$sort": {"authorized_date": 1}}
+        ]
+        rmas = list(db.rma_requests.aggregate(pipeline))
         return [RMA._serialize(r) for r in rmas]
     
     @staticmethod

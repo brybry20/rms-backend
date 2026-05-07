@@ -16,13 +16,13 @@ class MongoDB:
                 # Test connection
                 cls._client.admin.command('ping')
                 cls._db = cls._client[Config.MONGO_DATABASE]
-                print(f"✅ Connected to MongoDB Atlas! Database: {Config.MONGO_DATABASE}")
+                print(f"Connected to MongoDB Atlas! Database: {Config.MONGO_DATABASE}")
                 
                 # Ensure indexes
                 cls._ensure_indexes()
                 
             except ConnectionFailure as e:
-                print(f"❌ MongoDB connection failed: {e}")
+                print(f"MongoDB connection failed: {e}")
                 raise
         return cls._db
     
@@ -51,9 +51,9 @@ class MongoDB:
             db.notifications.create_index("user_id")
             db.notifications.create_index("is_read")
             
-            print("✅ MongoDB indexes created!")
+            print("MongoDB indexes created!")
         except Exception as e:
-            print(f"⚠️ Index creation warning: {e}")
+            print(f"Index creation warning: {e}")
     
     @classmethod
     def close(cls):
@@ -62,7 +62,7 @@ class MongoDB:
             cls._client.close()
             cls._client = None
             cls._db = None
-            print("✅ MongoDB connection closed")
+            print("MongoDB connection closed")
 
 # Helper functions for backward compatibility
 def get_db_connection():
@@ -79,9 +79,9 @@ def init_db():
     for col in collections:
         if col not in db.list_collection_names():
             db.create_collection(col)
-            print(f"✅ Created collection: {col}")
+            print(f"Created collection: {col}")
     
-    print("✅ Database initialization complete!")
+    print("Database initialization complete!")
     return True
 
 def reset_database():
@@ -92,9 +92,9 @@ def reset_database():
     for col in collections:
         if col in db.list_collection_names():
             db[col].drop()
-            print(f"✅ Dropped collection: {col}")
+            print(f"Dropped collection: {col}")
     
-    print("✅ Database reset complete!")
+    print("Database reset complete!")
 
 def get_placeholder():
     """Placeholder function for compatibility (not needed for MongoDB)"""
