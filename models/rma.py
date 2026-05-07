@@ -259,7 +259,17 @@ class RMA:
         
         pipeline = [
             {"$addFields": {
-                "dealer_id_obj": { "$toObjectId": "$dealer_id" }
+                "dealer_id_obj": {
+                    "$cond": [
+                        {"$and": [
+                            {"$ne": ["$dealer_id", None]},
+                            {"$ne": ["$dealer_id", ""]},
+                            {"$eq": [{"$type": "$dealer_id"}, "string"]}
+                        ]},
+                        {"$toObjectId": "$dealer_id"},
+                        "$dealer_id"
+                    ]
+                }
             }},
             {"$lookup": {
                 "from": "users",
@@ -291,7 +301,17 @@ class RMA:
         pipeline = [
             {"$match": {"status": "pending_authorizer"}},
             {"$addFields": {
-                "dealer_id_obj": { "$toObjectId": "$dealer_id" }
+                "dealer_id_obj": {
+                    "$cond": [
+                        {"$and": [
+                            {"$ne": ["$dealer_id", None]},
+                            {"$ne": ["$dealer_id", ""]},
+                            {"$eq": [{"$type": "$dealer_id"}, "string"]}
+                        ]},
+                        {"$toObjectId": "$dealer_id"},
+                        "$dealer_id"
+                    ]
+                }
             }},
             {"$lookup": {
                 "from": "users",
@@ -322,7 +342,17 @@ class RMA:
         pipeline = [
             {"$match": {"status": "authorized"}},
             {"$addFields": {
-                "dealer_id_obj": { "$toObjectId": "$dealer_id" }
+                "dealer_id_obj": {
+                    "$cond": [
+                        {"$and": [
+                            {"$ne": ["$dealer_id", None]},
+                            {"$ne": ["$dealer_id", ""]},
+                            {"$eq": [{"$type": "$dealer_id"}, "string"]}
+                        ]},
+                        {"$toObjectId": "$dealer_id"},
+                        "$dealer_id"
+                    ]
+                }
             }},
             {"$lookup": {
                 "from": "users",
