@@ -213,4 +213,15 @@ def register_authorizer_routes(app):
         if result.modified_count > 0:
             return jsonify({'message': 'Authorization details updated successfully!'}), 200
         return jsonify({'error': 'No changes made'}), 400
+
+    # --- Analytics routes ---
+    @app.route('/api/authorizer/all-rma', methods=['GET'])
+    def auth_get_all_rma():
+        rmas = RMA.get_all()
+        return jsonify({'rmas': rmas}), 200
+    
+    @app.route('/api/authorizer/stats', methods=['GET'])
+    def auth_get_stats():
+        status_counts = RMA.get_stats()
+        return jsonify({'status_counts': status_counts}), 200
 
