@@ -210,7 +210,7 @@ def register_approver_routes(app):
         return jsonify({'error': 'RMA not found or not authorized'}), 400
 
     # --- Analytics routes ---
-    @app.route('/api/approver/all-rma', methods=['GET'])
+    @app.route('/api/approver/all-rma', methods=['GET'], strict_slashes=False)
     def app_get_all_rma():
         rmas = RMA.get_all()
         return jsonify({'rmas': rmas}), 200
@@ -251,7 +251,7 @@ def register_approver_routes(app):
         if result.deleted_count > 0: return jsonify({'message': 'RMA deleted successfully!'}), 200
         return jsonify({'error': 'RMA not found'}), 404
     
-    @app.route('/api/approver/stats', methods=['GET'])
+    @app.route('/api/approver/stats', methods=['GET'], strict_slashes=False)
     def app_get_stats():
         status_counts = RMA.get_stats()
         return jsonify({'status_counts': status_counts}), 200
