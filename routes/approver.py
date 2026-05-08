@@ -214,6 +214,42 @@ def register_approver_routes(app):
     def app_get_all_rma():
         rmas = RMA.get_all()
         return jsonify({'rmas': rmas}), 200
+
+    @app.route('/api/approver/rma/<rma_id>', methods=['GET'])
+    def app_get_rma_details(rma_id):
+        rma = RMA.get_by_id(rma_id)
+        if rma:
+            return jsonify({'rma': rma}), 200
+        return jsonify({'error': 'RMA not found'}), 404
+
+    @app.route('/api/approver/rma/<rma_id>', methods=['PUT'])
+    def app_update_admin_rma(rma_id):
+        data = request.get_json()
+        db = get_db_connection()
+        allowed_fields = [
+            'status', 'return_type', 'reason_for_return', 'warranty',
+            'filer_name', 'distributor_name', 'product', 'product_description',
+            'work_environment', 'po_number', 'sales_invoice_number',
+            'shipping_date', 'return_date', 'end_user_company', 'end_user_location',
+            'end_user_industry', 'end_user_contact_person', 'problem_description',
+            'dealer_comments', 'authorized_by', 'authorized_date', 'return_received_by',
+            'authorizer_comments', 'approved_by', 'approved_date', 'approved_with',
+            'replacement_order_no', 'closed_date', 'approver_comments'
+        ]
+        update_data = {f: data[f] for f in allowed_fields if f in data}
+        if 'warranty' in update_data: update_data['warranty'] = 1 if update_data['warranty'] else 0
+        if not update_data: return jsonify({'error': 'No fields to update'}), 400
+        update_data['updated_at'] = datetime.now()
+        result = db.rma_requests.update_one({"_id": ObjectId(rma_id)}, {"$set": update_data})
+        if result.modified_count > 0: return jsonify({'message': 'RMA updated successfully!'}), 200
+        return jsonify({'error': 'No changes made'}), 400
+
+    @app.route('/api/approver/rma/<rma_id>', methods=['DELETE'])
+    def app_delete_admin_rma(rma_id):
+        db = get_db_connection()
+        result = db.rma_requests.delete_one({"_id": ObjectId(rma_id)})
+        if result.deleted_count > 0: return jsonify({'message': 'RMA deleted successfully!'}), 200
+        return jsonify({'error': 'RMA not found'}), 404
     
     @app.route('/api/approver/stats', methods=['GET'])
     def app_get_stats():
